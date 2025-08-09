@@ -4,9 +4,15 @@
 <meta charset="UTF-8">
 <title>Conciliação Financeira</title>
 <link rel="stylesheet" href="style.css">
+<!-- Biblioteca para manipulação de arquivos Excel -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.19.3/xlsx.full.min.js"></script>
 </head>
 <body>
+
+<!-- Elemento para o Spinner/Indicador de Progresso -->
+<div id="spinner-overlay" class="spinner-overlay hidden">
+  <div class="spinner"></div>
+</div>
 
 <header>
   <h1>Conciliação Financeira</h1>
@@ -16,53 +22,61 @@
   <section class="container">
     <div class="panel">
       <h2>Dados do Banco</h2>
-      <input type="file" id="fileBanco" accept=".csv,.xlsx,.xls">
-      <h3>Ou colar extrato bruto</h3>
-      <textarea id="textoBanco" placeholder="Cole aqui o texto copiado do Internet Banking"></textarea>
+      <p class="panel-description">Importe um arquivo ou cole o extrato bruto da fatura do seu cartão de crédito abaixo.</p>
       
-      <div class="input-group">
-        <div>
-          <label for="anoExtrato">Ano:</label>
-          <input type="number" id="anoExtrato" placeholder="Ex: 2025">
+      <input type="file" id="fileBanco" accept=".csv,.xlsx,.xls">
+      
+      <h3>Ou colar extrato bruto</h3>
+      <textarea id="textoBanco" placeholder="Cole aqui o texto copiado do Internet Banking.&#10;Ex:&#10;15/07 SUPERMERCADO CONQUISTA 12,58&#10;17/07 AJUSTE CRED PARC S JUROS 0,04"></textarea>
+      
+      <button id="btnProcessarTexto">1. Processar Texto Bruto</button>
+      
+      <!-- PAINEL DE REFINAMENTO (Inicialmente oculto) -->
+      <div id="painelRefinamento" class="refinement-panel hidden">
+        <h4>Refinamento dos Lançamentos</h4>
+        <div class="input-group">
+          <label for="filtroDataInicio">2. Mostrar lançamentos a partir de:</label>
+          <input type="date" id="filtroDataInicio" title="Selecione para filtrar os lançamentos que aparecerão na tabela.">
         </div>
-        <div>
-          <label for="nomeConta">Conta:</label>
-          <input type="text" id="nomeConta" placeholder="Ex: CEF 204-5">
+        <div class="input-group">
+          <label for="novaDataLancamento">3. Atribuir nova data para todos:</label>
+          <input type="date" id="novaDataLancamento" title="Opcional: defina uma data única para todos os lançamentos filtrados.">
         </div>
+        <button id="btnRefinarDados">4. Aplicar Filtros e Nova Data</button>
       </div>
       
-      <button id="btnProcessarTexto">Processar Texto</button>
-      <button id="btnExportarPlanilha" class="btn-export">Exportar Planilha Pronta</button>
+      <button id="btnExportarPlanilha" class="btn-export">Exportar Tabela Acima como XLSX</button>
       
       <table id="previewBanco"></table>
     </div>
 
     <div class="panel">
       <h2>Dados do Orçamento</h2>
+      <p class="panel-description">Importe o arquivo CSV ou XLSX do seu sistema de gestão (Mobills, Organizze, etc.).</p>
       <input type="file" id="fileOrcamento" accept=".csv,.xlsx,.xls">
       <table id="previewOrcamento"></table>
     </div>
   </section>
 
   <div class="action-center">
-    <button id="btnComparar">Comparar</button>
+    <button id="btnComparar">Comparar Dados do Banco vs. Orçamento</button>
   </div>
 
-  <section>
-    <h2>Discrepâncias - Banco</h2>
+  <section class="discrepancy-section">
+    <h2>Discrepâncias - Itens no Banco que não estão no Orçamento</h2>
     <table id="tabelaBanco"></table>
-    <button onclick="exportarCSV(discrepBanco,'discrepancias_banco.csv')">Exportar CSV Banco</button>
+    <button id="btnExportarDiscrepBanco">Exportar CSV</button>
   </section>
 
-  <section>
-    <h2>Discrepâncias - Orçamento</h2>
+  <section class="discrepancy-section">
+    <h2>Discrepâncias - Itens no Orçamento que não estão no Banco</h2>
     <table id="tabelaOrcamento"></table>
-    <button onclick="exportarCSV(discrepOrc,'discrepancias_orcamento.csv')">Exportar CSV Orçamento</button>
+    <button id="btnExportarDiscrepOrc">Exportar CSV</button>
   </section>
 </main>
 
 <footer>
-  <p>Ferramenta local - Nenhum dado é enviado para servidores.</p>
+  <p>Ferramenta 100% local e offline - Nenhum dado é enviado para servidores.</p>
 </footer>
 
 <script src="script.js"></script>
