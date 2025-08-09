@@ -19,7 +19,21 @@
       <input type="file" id="fileBanco" accept=".csv,.xlsx,.xls">
       <h3>Ou colar extrato bruto</h3>
       <textarea id="textoBanco" placeholder="Cole aqui o texto copiado do Internet Banking"></textarea>
+      
+      <div class="input-group">
+        <div>
+          <label for="anoExtrato">Ano:</label>
+          <input type="number" id="anoExtrato" placeholder="Ex: 2025">
+        </div>
+        <div>
+          <label for="nomeConta">Conta:</label>
+          <input type="text" id="nomeConta" placeholder="Ex: CEF 204-5">
+        </div>
+      </div>
+      
       <button id="btnProcessarTexto">Processar Texto</button>
+      <button id="btnExportarPlanilha" class="btn-export">Exportar Planilha Pronta</button>
+      
       <table id="previewBanco"></table>
     </div>
 

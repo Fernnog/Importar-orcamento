@@ -41,6 +41,7 @@ h2 {
 }
 
 textarea {
+  box-sizing: border-box; /* Garante que padding não afete a largura final */
   width: 100%;
   height: 150px;
   margin-top: 8px;
@@ -76,6 +77,7 @@ button {
   border-radius: 4px;
   cursor: pointer;
   margin-top: 10px;
+  font-size: 14px; /* Adicionado para consistência */
 }
 
 button:hover {
@@ -93,4 +95,29 @@ footer {
   font-size: 13px;
   background-color: #ecf0f1;
   color: #555;
+}
+
+/* --- MELHORIAS ADICIONADAS --- */
+
+.input-group {
+  margin-top: 15px;
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  gap: 8px; /* Espaçamento entre labels e inputs */
+  flex-wrap: wrap; /* Permite que os campos quebrem a linha em telas pequenas */
+}
+
+.input-group label {
+  font-weight: bold;
+}
+
+.input-group input {
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+}
+
+#btnExportarPlanilha:hover {
+  background-color: #229954 !important;
 }
