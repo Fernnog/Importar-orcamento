@@ -70,17 +70,58 @@ function resetApplication() {
 
 // --- FUNÇÕES DE PROCESSAMENTO DE DADOS ---
 
-function lerArquivo(file, callback) {
+let xlsxLibraryLoaded = false;
+
+function loadXLSXLibrary() {
+  if (xlsxLibraryLoaded) return Promise.resolve();
+  if (typeof XLSX !== 'undefined') {
+    xlsxLibraryLoaded = true;
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    const primaryCDN = 'https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js';
+    const fallbackCDN = 'https://unpkg.com/xlsx/dist/xlsx.full.min.js';
+
+    const script = document.createElement('script');
+    script.src = primaryCDN;
+
+    script.onload = () => {
+      xlsxLibraryLoaded = true;
+      resolve();
+    };
+
+    script.onerror = () => {
+      const fallbackScript = document.createElement('script');
+      fallbackScript.src = fallbackCDN;
+      fallbackScript.onload = () => {
+        xlsxLibraryLoaded = true;
+        resolve();
+      };
+      fallbackScript.onerror = () => {
+        reject(new Error("Falha ao carregar a funcionalidade de planilhas."));
+      };
+      document.head.appendChild(fallbackScript);
+    };
+
+    document.head.appendChild(script);
+  });
+}
+
+async function lerArquivo(file, callback) {
   showSpinner();
   const ext = file.name.split('.').pop().toLowerCase();
 
-  // Verificação de segurança: O XLSX está disponível?
-  if (['xlsx', 'xls'].includes(ext) && typeof XLSX === 'undefined') {
-    showToast("Erro: A biblioteca de planilhas não pôde ser carregada. Verifique sua conexão.", 'error');
-    hideSpinner();
-    return;
+  if (['xlsx', 'xls'].includes(ext)) {
+    try {
+      await loadXLSXLibrary();
+    } catch (error) {
+      showToast(error.message, 'error');
+      hideSpinner();
+      return;
+    }
   }
-  
+
   if (!['csv', 'xlsx', 'xls'].includes(ext)) {
     showToast('Formato de arquivo não suportado: ' + ext, 'error');
     hideSpinner();
@@ -190,19 +231,25 @@ function mostrarTabela(dados, id, noResultsMessage = 'Nenhum dado encontrado.') 
   tbl.appendChild(tbody);
 }
 
-function exportarXLSX(dados, nomeArquivo) {
+async function exportarXLSX(dados, nomeArquivo) {
   if (!dados || !dados.length) {
     showToast("A lista de transações para exportar está vazia.", 'error');
     return;
   }
-  const dadosParaPlanilha = dados.map(linha => ({
-    'Data Ocorrência': linha.data, 'Descrição': linha.descricao, 'Valor': linha.valor
-  }));
-  const ws = XLSX.utils.json_to_sheet(dadosParaPlanilha);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Transacoes");
-  XLSX.writeFile(wb, nomeArquivo);
-  showToast('Planilha exportada com sucesso!', 'success');
+  
+  try {
+    await loadXLSXLibrary();
+    const dadosParaPlanilha = dados.map(linha => ({
+      'Data Ocorrência': linha.data, 'Descrição': linha.descricao, 'Valor': linha.valor
+    }));
+    const ws = XLSX.utils.json_to_sheet(dadosParaPlanilha);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Transacoes");
+    XLSX.writeFile(wb, nomeArquivo);
+    showToast('Planilha exportada com sucesso!', 'success');
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
 }
 
 function exportarCSV(dados, nomeArquivo) {
@@ -252,7 +299,6 @@ function comparar() {
 
 // --- EVENT LISTENERS (CENTRALIZADOS) ---
 
-// Usamos DOMContentLoaded com 'defer', garantindo que o DOM e os scripts estejam prontos.
 document.addEventListener('DOMContentLoaded', () => {
   DOM.btnNovaConciliacao.addEventListener('click', resetApplication);
 
@@ -299,7 +345,9 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast('Filtro aplicado com sucesso!', 'success');
   });
 
-  DOM.btnExportarPlanilha.addEventListener('click', () => exportarXLSX(appState.dadosBanco, 'importacao_pronta.xlsx'));
+  DOM.btnExportarPlanilha.addEventListener('click', () => {
+    exportarXLSX(appState.dadosBanco, 'importacao_pronta.xlsx');
+  });
 
   DOM.fileOrcamento.addEventListener('change', e => {
     if (!e.target.files.length) return;
@@ -310,6 +358,14 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast(`Orçamento com ${appState.dadosOrcamento.length} itens importado.`, 'success');
       }
     });
+  });
+  
+  DOM.fileBanco.addEventListener('change', e => {
+      if(!e.target.files.length) return;
+      lerArquivo(e.target.files[0], linhas => {
+          // Placeholder para futura implementação de importação de banco via arquivo
+          showToast('Importação de arquivo do banco ainda não implementada.', 'info');
+      });
   });
 
   DOM.btnComparar.addEventListener('click', comparar);
