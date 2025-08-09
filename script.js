@@ -157,19 +157,40 @@ async function lerArquivo(file, callback) {
 }
 
 function importarTextoBrutoInteligente(texto) {
-  const regexLancamento = /^(\d{2}\/\d{2})\s+(.+?)\s+([\d.,]+)$/gm;
+  // Divide o texto em linhas, remove espaços extras e ignora linhas vazias. [2, 4]
+  const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const anoCorrente = new Date().getFullYear();
-  let dados = [];
-  let match;
+  const dados = [];
+  const regexData = /^\d{2}\/\d{2}$/; // Regex para encontrar uma linha que contém APENAS uma data (ex: "16/12")
+  const regexValor = /^[\d.,]+$/;    // Regex para encontrar uma linha que contém APENAS um valor (ex: "49,00")
 
-  while ((match = regexLancamento.exec(texto)) !== null) {
-    const [, dataStr, descricao, valorStr] = match;
-    const dataCompleta = `${dataStr}/${anoCorrente}`;
-    const valorNumerico = parseFloat(valorStr.replace(/\./g, '').replace(',', '.'));
-    const isCredito = /ajuste cred|estorno/i.test(descricao);
-    const valorFinal = isCredito ? valorNumerico : -valorNumerico;
-    dados.push({ data: dataCompleta, descricao: descricao.trim(), valor: valorFinal });
+  // Itera pelas linhas procurando por um padrão de transação. [2]
+  for (let i = 0; i < linhas.length; i++) {
+    // Uma transação válida é um bloco de 3 linhas: Data, seguida por Descrição, seguida por Valor. [2]
+    if (regexData.test(linhas[i]) && (i + 2 < linhas.length) && regexValor.test(linhas[i + 2])) {
+      
+      const dataStr = linhas[i];
+      const descricao = linhas[i + 1];
+      const valorStr = linhas[i + 2];
+
+      const dataCompleta = `${dataStr}/${anoCorrente}`;
+      const valorNumerico = parseFloat(valorStr.replace(/\./g, '').replace(',', '.'));
+
+      // Em extratos de cartão, compras são valores "positivos". Para a conciliação, as tornamos negativas (saídas).
+      const isCredito = /pagamento em|crédito/i.test(descricao);
+      const valorFinal = isCredito ? valorNumerico : -valorNumerico;
+
+      dados.push({
+        data: dataCompleta,
+        descricao: descricao.trim(),
+        valor: valorFinal
+      });
+
+      // Pula as próximas 2 linhas, pois já foram processadas como parte desta transação.
+      i += 2;
+    }
   }
+  
   return dados;
 }
 
