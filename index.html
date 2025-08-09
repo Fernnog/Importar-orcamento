@@ -2,162 +2,52 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Conciliação de Lançamentos</title>
-<style>
-body { font-family: Arial, sans-serif; margin: 20px; }
-h1 { text-align: center; }
-.container { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
-.panel { flex: 1; min-width: 300px; background: #f8f8f8; padding: 15px; border-radius: 8px; }
-table { border-collapse: collapse; width: 100%; margin-top: 10px; font-size: 14px; }
-th, td { border: 1px solid #ccc; padding: 5px; }
-th { background: #eee; }
-button { margin-top: 10px; padding: 8px 12px; }
-input[type="file"] { margin-top: 8px; }
-</style>
-<!-- SheetJS para ler arquivos Excel -->
+<title>Conciliação Financeira</title>
+<link rel="stylesheet" href="style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.19.3/xlsx.full.min.js"></script>
 </head>
 <body>
 
-<h1>Conciliação Financeira</h1>
+<header>
+  <h1>Conciliação Financeira</h1>
+</header>
 
-<div class="container">
-  <div class="panel">
-    <h2>Dados do Banco</h2>
-    <input type="file" id="fileBanco" accept=".csv,.xlsx,.xls">
-    <table id="previewBanco"></table>
+<main>
+  <section class="container">
+    <div class="panel">
+      <h2>Dados do Banco</h2>
+      <input type="file" id="fileBanco" accept=".csv,.xlsx,.xls">
+      <table id="previewBanco"></table>
+    </div>
+
+    <div class="panel">
+      <h2>Dados do Orçamento</h2>
+      <input type="file" id="fileOrcamento" accept=".csv,.xlsx,.xls">
+      <table id="previewOrcamento"></table>
+    </div>
+  </section>
+
+  <div class="action-center">
+    <button id="btnComparar">Comparar</button>
   </div>
-  <div class="panel">
-    <h2>Dados do Orçamento</h2>
-    <input type="file" id="fileOrcamento" accept=".csv,.xlsx,.xls">
-    <table id="previewOrcamento"></table>
-  </div>
-</div>
 
-<div style="text-align:center; margin-top:20px;">
-  <button onclick="comparar()">Comparar</button>
-</div>
+  <section>
+    <h2>Discrepâncias - Banco</h2>
+    <table id="tabelaBanco"></table>
+    <button onclick="exportarCSV(discrepBanco,'discrepancias_banco.csv')">Exportar CSV Banco</button>
+  </section>
 
-<h2>Discrepâncias - Banco</h2>
-<table id="tabelaBanco"></table>
-<button onclick="exportarCSV(discrepBanco,'discrepancias_banco.csv')">Exportar CSV Banco</button>
+  <section>
+    <h2>Discrepâncias - Orçamento</h2>
+    <table id="tabelaOrcamento"></table>
+    <button onclick="exportarCSV(discrepOrc,'discrepancias_orcamento.csv')">Exportar CSV Orçamento</button>
+  </section>
+</main>
 
-<h2>Discrepâncias - Orçamento</h2>
-<table id="tabelaOrcamento"></table>
-<button onclick="exportarCSV(discrepOrc,'discrepancias_orcamento.csv')">Exportar CSV Orçamento</button>
+<footer>
+  <p>Ferramenta local - Nenhum dado é enviado para servidores.</p>
+</footer>
 
-<script>
-let dadosBanco = [], dadosOrcamento = [];
-let discrepBanco = [], discrepOrc = [];
-
-function lerArquivo(file, callback) {
-  const ext = file.name.split('.').pop().toLowerCase();
-  if (ext === 'csv') {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const linhas = e.target.result.split(/\r?\n/).map(l => l.split(','));
-      callback(linhas);
-    };
-    reader.readAsText(file, 'UTF-8');
-  } else if (ext === 'xlsx' || ext === 'xls') {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const data = new Uint8Array(e.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const primeiraAba = workbook.SheetNames[0];
-      const planilha = workbook.Sheets[primeiraAba];
-      const linhas = XLSX.utils.sheet_to_json(planilha, { header: 1 });
-      callback(linhas);
-    };
-    reader.readAsArrayBuffer(file);
-  } else {
-    alert('Formato de arquivo não suportado: ' + ext);
-  }
-}
-
-function padronizarDados(linhas) {
-  return linhas.slice(1).map(l => [
-    (l[0] || '').trim(),
-    parseFloat(l[1]) || 0
-  ]).filter(l => l[0] && !isNaN(l[1]));
-}
-
-function criarChaveExata(linha) {
-  const desc = (linha[0] || '').toUpperCase().replace(/\s+/g,' ').trim();
-  const val = (Math.round(linha[1]*100)/100).toFixed(2);
-  return `${desc}_${val}`;
-}
-
-function criarChaveParcial(linha) {
-  const desc = (linha[0] || '').toUpperCase().replace(/\s+/g,' ').trim();
-  const val = (Math.round(linha[1]*100)/100).toFixed(2);
-  return `${desc.substring(0,8)}_${val}`;
-}
-
-function mostrarTabela(dados, id) {
-  const tbl = document.getElementById(id);
-  tbl.innerHTML = '';
-  if (!dados.length) return;
-  let header = tbl.insertRow();
-  header.innerHTML = '<th>Descrição</th><th>Valor</th>';
-  dados.forEach(l => {
-    let row = tbl.insertRow();
-    row.insertCell().innerText = l[0];
-    row.insertCell().innerText = l[1];
-  });
-}
-
-document.getElementById('fileBanco').addEventListener('change', e => {
-  lerArquivo(e.target.files[0], linhas => {
-    dadosBanco = padronizarDados(linhas);
-    mostrarTabela(dadosBanco, 'previewBanco');
-  });
-});
-
-document.getElementById('fileOrcamento').addEventListener('change', e => {
-  lerArquivo(e.target.files[0], linhas => {
-    dadosOrcamento = padronizarDados(linhas);
-    mostrarTabela(dadosOrcamento, 'previewOrcamento');
-  });
-});
-
-function comparar() {
-  if (!dadosBanco.length || !dadosOrcamento.length) {
-    alert("Importe os dois arquivos antes de comparar.");
-    return;
-  }
-  // Etapa 1 - exata
-  const chBancoEx = new Set(dadosBanco.map(criarChaveExata));
-  const chOrcEx = new Set(dadosOrcamento.map(criarChaveExata));
-  const bancoRest = dadosBanco.filter(l => !chOrcEx.has(criarChaveExata(l)));
-  const orcRest = dadosOrcamento.filter(l => !chBancoEx.has(criarChaveExata(l)));
-
-  // Etapa 2 - parcial
-  const chBancoPar = new Set(bancoRest.map(criarChaveParcial));
-  const chOrcPar = new Set(orcRest.map(criarChaveParcial));
-  discrepBanco = bancoRest.filter(l => !chOrcPar.has(criarChaveParcial(l)));
-  discrepOrc = orcRest.filter(l => !chBancoPar.has(criarChaveParcial(l)));
-
-  mostrarTabela(discrepBanco,'tabelaBanco');
-  mostrarTabela(discrepOrc,'tabelaOrcamento');
-}
-
-function exportarCSV(dados, nomeArquivo) {
-  if (!dados.length) { alert("Nada para exportar."); return; }
-  let conteudo = 'Descrição,Valor\n' + dados.map(l => `${l[0]},${l[1]}`).join('\n');
-  let blob = new Blob([conteudo], { type: 'text/csv;charset=utf-8;' });
-  let link = document.createElement("a");
-  if (navigator.msSaveBlob) { navigator.msSaveBlob(blob, nomeArquivo); }
-  else {
-    let url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", nomeArquivo);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
-}
-</script>
-
+<script src="script.js"></script>
 </body>
 </html>
