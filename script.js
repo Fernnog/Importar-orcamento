@@ -73,6 +73,14 @@ function resetApplication() {
 function lerArquivo(file, callback) {
   showSpinner();
   const ext = file.name.split('.').pop().toLowerCase();
+
+  // Verificação de segurança: O XLSX está disponível?
+  if (['xlsx', 'xls'].includes(ext) && typeof XLSX === 'undefined') {
+    showToast("Erro: A biblioteca de planilhas não pôde ser carregada. Verifique sua conexão.", 'error');
+    hideSpinner();
+    return;
+  }
+  
   if (!['csv', 'xlsx', 'xls'].includes(ext)) {
     showToast('Formato de arquivo não suportado: ' + ext, 'error');
     hideSpinner();
@@ -244,6 +252,7 @@ function comparar() {
 
 // --- EVENT LISTENERS (CENTRALIZADOS) ---
 
+// Usamos DOMContentLoaded com 'defer', garantindo que o DOM e os scripts estejam prontos.
 document.addEventListener('DOMContentLoaded', () => {
   DOM.btnNovaConciliacao.addEventListener('click', resetApplication);
 

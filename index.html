@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <title>Conciliação Financeira</title>
 <link rel="stylesheet" href="style.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.19.3/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -75,6 +74,8 @@
   <div class="spinner"></div>
 </div>
 
-<script src="script.js"></script>
+<!-- Scripts com 'defer' para garantir a ordem correta de execução -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.19.3/xlsx.full.min.js" defer></script>
+<script src="script.js" defer></script>
 </body>
 </html>
