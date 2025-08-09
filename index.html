@@ -21,7 +21,7 @@
       <h3>Ou colar extrato bruto</h3>
       <textarea id="textoBanco" placeholder="Cole aqui o texto copiado do Internet Banking. Ex: fatura do cartão de crédito."></textarea>
       
-      <div id="painelRefinamento" class="refinement-panel">
+      <div id="painelRefinamento" class="refinement-panel hidden">
         <div class="input-group">
           <label for="filtroDataInicio">1. Mostrar lançamentos a partir de:</label>
           <input type="date" id="filtroDataInicio">
@@ -50,16 +50,16 @@
     <button id="btnComparar">Comparar</button>
   </div>
 
-  <section>
+  <section class="discrepancy-section">
     <h2>Discrepâncias - Banco</h2>
+    <button id="btnExportarDiscrepBanco" class="btn-export">Exportar CSV</button>
     <table id="tabelaBanco"></table>
-    <button onclick="exportarCSV(discrepBanco,'discrepancias_banco.csv')">Exportar CSV Banco</button>
   </section>
 
-  <section>
+  <section class="discrepancy-section">
     <h2>Discrepâncias - Orçamento</h2>
+    <button id="btnExportarDiscrepOrcamento" class="btn-export">Exportar CSV</button>
     <table id="tabelaOrcamento"></table>
-    <button onclick="exportarCSV(discrepOrc,'discrepancias_orcamento.csv')">Exportar CSV Orçamento</button>
   </section>
 </main>
 
@@ -69,6 +69,11 @@
 
 <!-- Container para as notificações (Toasts) -->
 <div id="toastContainer"></div>
+
+<!-- Spinner de Carregamento (Melhoria UX) -->
+<div id="spinnerOverlay" class="spinner-overlay hidden">
+  <div class="spinner"></div>
+</div>
 
 <script src="script.js"></script>
 </body>

@@ -8,12 +8,16 @@ body {
 header {
   background-color: #2c3e50;
   color: white;
-  padding: 15px 0;
+  padding: 15px 20px;
   text-align: center;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 h1 {
   margin: 0;
+  font-size: 24px;
 }
 
 main {
@@ -38,22 +42,11 @@ main {
   box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
-.panel-description {
-    font-size: 14px;
-    color: #555;
-    margin-top: -10px;
-    margin-bottom: 15px;
-}
-
 h2 {
   margin-top: 0;
   border-bottom: 2px solid #ecf0f1;
   padding-bottom: 10px;
   color: #2c3e50;
-}
-
-h3 {
-    margin-bottom: 5px;
 }
 
 textarea {
@@ -84,7 +77,6 @@ th, td {
 
 th {
   background-color: #f7f7f7;
-  font-weight: bold;
 }
 
 button {
@@ -97,7 +89,6 @@ button {
   margin-top: 10px;
   font-size: 15px;
   transition: background-color 0.2s;
-  width: 100%; /* Padronizar largura */
   box-sizing: border-box;
 }
 
@@ -110,12 +101,19 @@ button:disabled {
   cursor: not-allowed;
 }
 
-.btn-export {
-    background-color: #27ae60;
+.btn-header {
+  background-color: #95a5a6;
+  margin: 0;
+}
+.btn-header:hover {
+  background-color: #7f8c8d;
 }
 
+.btn-export {
+  background-color: #27ae60;
+}
 .btn-export:hover {
-    background-color: #229954;
+  background-color: #229954;
 }
 
 .action-center {
@@ -130,7 +128,6 @@ button:disabled {
     font-weight: bold;
     background-color: #e67e22;
 }
-
 .action-center button:hover {
     background-color: #d35400;
 }
@@ -144,26 +141,29 @@ button:disabled {
 }
 
 .discrepancy-section button {
-    width: auto; /* Botão de exportação menor */
+    width: auto;
     font-size: 14px;
+    float: right;
+    margin-top: -5px;
 }
 
 footer {
   text-align: center;
-  padding: 15px;
-  font-size: 14px;
-  margin-top: 20px;
+  padding: 12px;
+  font-size: 13px;
   background-color: #ecf0f1;
   color: #555;
 }
 
-/* --- ESTILOS PARA NOVAS FUNCIONALIDADES --- */
-
-.hidden {
-  display: none !important;
+.no-results {
+  text-align: center;
+  padding: 20px 10px;
+  color: #777;
+  font-style: italic;
+  background-color: #fcfcfc;
 }
 
-/* Painel de Refinamento */
+/* --- PAINEL DE REFINAMENTO --- */
 .refinement-panel {
   background-color: #f8f9fa;
   border: 1px solid #e9ecef;
@@ -172,12 +172,6 @@ footer {
   margin-top: 15px;
   margin-bottom: 15px;
 }
-
-.refinement-panel h4 {
-    margin-top: 0;
-    color: #2c3e50;
-}
-
 .refinement-panel .input-group {
   margin-bottom: 12px;
   display: flex;
@@ -185,41 +179,66 @@ footer {
   gap: 10px;
   flex-wrap: wrap;
 }
-
 .refinement-panel label {
   font-weight: bold;
-  flex-basis: 240px;
 }
-
 .refinement-panel input {
   padding: 8px;
   border-radius: 4px;
   border: 1px solid #ccc;
-  flex-grow: 1;
 }
-
 #btnRefinarDados {
-    background-color: #8e44ad;
+  background-color: #e67e22;
+  width: 100%;
 }
-
 #btnRefinarDados:hover {
-    background-color: #793694;
+  background-color: #d35400;
 }
 
-/* Spinner Overlay */
+/* --- SISTEMA DE NOTIFICAÇÃO (TOAST) --- */
+#toastContainer {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.toast {
+  padding: 15px 20px;
+  border-radius: 5px;
+  color: white;
+  font-size: 15px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+  opacity: 0;
+  transform: translateX(100%);
+  animation: slideIn 0.5s forwards, fadeOut 0.5s 4.5s forwards;
+}
+.toast.info { background-color: #3498db; }
+.toast.success { background-color: #2ecc71; }
+.toast.error { background-color: #e74c3c; }
+@keyframes slideIn {
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes fadeOut {
+  to { opacity: 0; transform: translateX(100%); }
+}
+
+/* --- SPINNER DE CARREGAMENTO (MELHORIA UX) --- */
 .spinner-overlay {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(255, 255, 255, 0.7);
+  background-color: rgba(255, 255, 255, 0.8);
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1000;
+  z-index: 2000;
+  transition: opacity 0.3s;
 }
-
 .spinner {
   border: 8px solid #f3f3f3;
   border-top: 8px solid #3498db;
@@ -228,8 +247,12 @@ footer {
   height: 60px;
   animation: spin 1s linear infinite;
 }
-
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* --- CLASSE UTILITÁRIA --- */
+.hidden {
+  display: none !important;
 }
