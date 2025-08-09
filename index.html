@@ -4,80 +4,71 @@
 <meta charset="UTF-8">
 <title>Conciliação Financeira</title>
 <link rel="stylesheet" href="style.css">
-<!-- Biblioteca para manipulação de arquivos Excel -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.19.3/xlsx.full.min.js"></script>
 </head>
 <body>
 
-<!-- Elemento para o Spinner/Indicador de Progresso -->
-<div id="spinner-overlay" class="spinner-overlay hidden">
-  <div class="spinner"></div>
-</div>
-
 <header>
   <h1>Conciliação Financeira</h1>
+  <button id="btnNovaConciliacao" class="btn-header">✨ Nova Conciliação</button>
 </header>
 
 <main>
   <section class="container">
     <div class="panel">
       <h2>Dados do Banco</h2>
-      <p class="panel-description">Importe um arquivo ou cole o extrato bruto da fatura do seu cartão de crédito abaixo.</p>
-      
       <input type="file" id="fileBanco" accept=".csv,.xlsx,.xls">
-      
       <h3>Ou colar extrato bruto</h3>
-      <textarea id="textoBanco" placeholder="Cole aqui o texto copiado do Internet Banking.&#10;Ex:&#10;15/07 SUPERMERCADO CONQUISTA 12,58&#10;17/07 AJUSTE CRED PARC S JUROS 0,04"></textarea>
+      <textarea id="textoBanco" placeholder="Cole aqui o texto copiado do Internet Banking. Ex: fatura do cartão de crédito."></textarea>
       
-      <button id="btnProcessarTexto">1. Processar Texto Bruto</button>
-      
-      <!-- PAINEL DE REFINAMENTO (Inicialmente oculto) -->
-      <div id="painelRefinamento" class="refinement-panel hidden">
-        <h4>Refinamento dos Lançamentos</h4>
+      <div id="painelRefinamento" class="refinement-panel">
         <div class="input-group">
-          <label for="filtroDataInicio">2. Mostrar lançamentos a partir de:</label>
-          <input type="date" id="filtroDataInicio" title="Selecione para filtrar os lançamentos que aparecerão na tabela.">
+          <label for="filtroDataInicio">1. Mostrar lançamentos a partir de:</label>
+          <input type="date" id="filtroDataInicio">
         </div>
         <div class="input-group">
-          <label for="novaDataLancamento">3. Atribuir nova data para todos:</label>
-          <input type="date" id="novaDataLancamento" title="Opcional: defina uma data única para todos os lançamentos filtrados.">
+          <label for="novaDataLancamento">2. Atribuir nova data para todos:</label>
+          <input type="date" id="novaDataLancamento">
         </div>
-        <button id="btnRefinarDados">4. Aplicar Filtros e Nova Data</button>
+        <button id="btnRefinarDados">Refinar e Aplicar Nova Data</button>
       </div>
       
-      <button id="btnExportarPlanilha" class="btn-export">Exportar Tabela Acima como XLSX</button>
+      <button id="btnProcessarTexto">Processar Texto Bruto</button>
+      <button id="btnExportarPlanilha" class="btn-export">Exportar Tabela Acima (XLSX)</button>
       
       <table id="previewBanco"></table>
     </div>
 
     <div class="panel">
       <h2>Dados do Orçamento</h2>
-      <p class="panel-description">Importe o arquivo CSV ou XLSX do seu sistema de gestão (Mobills, Organizze, etc.).</p>
       <input type="file" id="fileOrcamento" accept=".csv,.xlsx,.xls">
       <table id="previewOrcamento"></table>
     </div>
   </section>
 
   <div class="action-center">
-    <button id="btnComparar">Comparar Dados do Banco vs. Orçamento</button>
+    <button id="btnComparar">Comparar</button>
   </div>
 
-  <section class="discrepancy-section">
-    <h2>Discrepâncias - Itens no Banco que não estão no Orçamento</h2>
+  <section>
+    <h2>Discrepâncias - Banco</h2>
     <table id="tabelaBanco"></table>
-    <button id="btnExportarDiscrepBanco">Exportar CSV</button>
+    <button onclick="exportarCSV(discrepBanco,'discrepancias_banco.csv')">Exportar CSV Banco</button>
   </section>
 
-  <section class="discrepancy-section">
-    <h2>Discrepâncias - Itens no Orçamento que não estão no Banco</h2>
+  <section>
+    <h2>Discrepâncias - Orçamento</h2>
     <table id="tabelaOrcamento"></table>
-    <button id="btnExportarDiscrepOrc">Exportar CSV</button>
+    <button onclick="exportarCSV(discrepOrc,'discrepancias_orcamento.csv')">Exportar CSV Orçamento</button>
   </section>
 </main>
 
 <footer>
-  <p>Ferramenta 100% local e offline - Nenhum dado é enviado para servidores.</p>
+  <p>Ferramenta local - Nenhum dado é enviado para servidores.</p>
 </footer>
+
+<!-- Container para as notificações (Toasts) -->
+<div id="toastContainer"></div>
 
 <script src="script.js"></script>
 </body>

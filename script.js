@@ -1,234 +1,167 @@
-// --- ARQUITETURA (PRIORIDADE 3) ---
-// Estado centralizado para toda a aplicação.
-const appState = {
-  banco: {
-    original: [], // Dados brutos parseados, nunca modificados após o parse.
-    refinado: [], // Dados filtrados e possivelmente com data alterada, mostrados na tela.
-  },
-  orcamento: [],
-  discrepancias: {
-    banco: [],
-    orcamento: [],
-  },
-  ui: {
-    isLoading: false,
-  },
-};
+// --- ESTADO DA APLICAÇÃO ---
+let dadosBanco = [], dadosOrcamento = [];
+let dadosBancoOriginais = []; // Para guardar o resultado do parsing inicial
+let discrepBanco = [], discrepOrc = [];
 
-// --- CONTROLE DE UI (PRIORIDADE 2) ---
+// --- SISTEMA DE NOTIFICAÇÃO ---
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerText = message;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.remove();
+  }, 5000);
+}
 
-/**
- * Controla a visibilidade do spinner e o estado dos botões.
- * @param {boolean} show - True para mostrar o spinner, false para esconder.
- */
-function toggleSpinner(show) {
-  const overlay = document.getElementById('spinner-overlay');
-  const buttons = document.querySelectorAll('button');
+// --- FUNÇÕES DE RESET ---
+function resetApplication() {
+  // Limpa variáveis de estado
+  dadosBanco = [];
+  dadosOrcamento = [];
+  dadosBancoOriginais = [];
+  discrepBanco = [];
+  discrepOrc = [];
+
+  // Limpa campos da interface
+  document.getElementById('textoBanco').value = '';
+  document.getElementById('fileBanco').value = '';
+  document.getElementById('fileOrcamento').value = '';
+  document.getElementById('filtroDataInicio').value = '';
+  document.getElementById('novaDataLancamento').value = '';
+
+  // Limpa todas as tabelas
+  mostrarTabelaBanco([], 'previewBanco');
+  mostrarTabela([], 'previewOrcamento', 'Nenhum orçamento importado.');
+  mostrarTabela([], 'tabelaBanco', 'Nenhuma discrepância encontrada.');
+  mostrarTabela([], 'tabelaOrcamento', 'Nenhuma discrepância encontrada.');
   
-  appState.ui.isLoading = show;
-  overlay.classList.toggle('hidden', !show);
-  buttons.forEach(button => button.disabled = show);
-}
-
-/**
- * Mostra uma tabela de preview para os dados do banco (formato com 3 colunas).
- * @param {Array} dados - Array de objetos {data, descricao, valor}.
- * @param {string} tableId - ID da tabela onde os dados serão exibidos.
- */
-function mostrarTabelaBanco(dados, tableId) {
-  const tbl = document.getElementById(tableId);
-  tbl.innerHTML = '';
-  if (!dados || !dados.length) return;
+  // Oculta painel de refinamento
+  document.getElementById('painelRefinamento').style.display = 'none';
   
-  const header = tbl.insertRow();
-  header.innerHTML = '<th>Data</th><th>Descrição</th><th>Valor (R$)</th>';
-  
-  dados.forEach(l => {
-    const row = tbl.insertRow();
-    row.insertCell().innerText = l.data;
-    row.insertCell().innerText = l.descricao;
-    const cellValor = row.insertCell();
-    cellValor.innerText = l.valor.toFixed(2);
-    cellValor.style.color = l.valor < 0 ? 'red' : 'green';
-  });
+  showToast('Sessão limpa. Pronto para uma nova conciliação!', 'success');
 }
 
-/**
- * Mostra uma tabela de preview para dados do orçamento e discrepâncias (formato com 2 colunas).
- * @param {Array} dados - Array de arrays [descricao, valor].
- * @param {string} tableId - ID da tabela.
- */
-function mostrarTabelaSimples(dados, tableId) {
-    const tbl = document.getElementById(tableId);
-    tbl.innerHTML = '';
-    if (!dados || !dados.length) return;
+// --- FUNÇÕES DE PROCESSAMENTO DE DADOS ---
 
-    const header = tbl.insertRow();
-    header.innerHTML = '<th>Descrição</th><th>Valor (R$)</th>';
-
-    dados.forEach(l => {
-        const row = tbl.insertRow();
-        row.insertCell().innerText = l[0]; // Descrição
-        const cellValor = row.insertCell();
-        cellValor.innerText = parseFloat(l[1]).toFixed(2);
-        cellValor.style.color = l[1] < 0 ? 'red' : 'green';
-    });
-}
-
-
-// --- PROCESSAMENTO DE DADOS (PRIORIDADE 1) ---
-
-/**
- * Parser inteligente para o texto bruto da fatura do cartão.
- * @param {string} texto - O texto copiado do internet banking.
- * @returns {Array} - Array de objetos {data, descricao, valor}.
- */
-function importarTextoBrutoInteligente(texto) {
-    const linhas = texto.split(/\r?\n/).filter(l => l.trim().length > 0);
-    // Regex melhorada para capturar data (dd/mm), descrição e valor.
-    const regexLancamento = /^(\d{2}\/\d{2})\s+(.+?)\s+([\d.,]+)$/;
-    const anoCorrente = new Date().getFullYear();
-    let dados = [];
-
-    for (const linha of linhas) {
-        const match = linha.trim().match(regexLancamento);
-        if (match) {
-            const [, dataStr, descricao, valorStr] = match;
-
-            const dataCompleta = `${dataStr}/${anoCorrente}`;
-            // Remove pontos de milhar e substitui vírgula por ponto decimal.
-            const valorNumerico = parseFloat(valorStr.replace(/\./g, '').replace(',', '.'));
-
-            // Inteligência para identificar se é crédito ou débito.
-            const isCredito = /ajuste cred|estorno|pagamento/i.test(descricao);
-            const valorFinal = isCredito ? valorNumerico : -valorNumerico;
-
-            dados.push({
-                data: dataCompleta,
-                descricao: descricao.trim(),
-                valor: valorFinal
-            });
-        }
-    }
-    return dados;
-}
-
-/**
- * Lê arquivos CSV ou Excel.
- * NOTA: Esta função foi mantida por compatibilidade.
- */
 function lerArquivo(file, callback) {
   const ext = file.name.split('.').pop().toLowerCase();
   if (ext === 'csv' || ext === 'xlsx' || ext === 'xls') {
     const reader = new FileReader();
     reader.onload = e => {
-      const data = new Uint8Array(e.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const primeiraAba = workbook.SheetNames[0];
-      const planilha = workbook.Sheets[primeiraAba];
-      const linhas = XLSX.utils.sheet_to_json(planilha, { header: 1 });
+      let linhas;
+      if (ext === 'csv') {
+        const text = new TextDecoder('utf-8').decode(e.target.result);
+        linhas = text.split(/\r?\n/).map(l => l.split(','));
+      } else {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const primeiraAba = workbook.SheetNames[0];
+        const planilha = workbook.Sheets[primeiraAba];
+        linhas = XLSX.utils.sheet_to_json(planilha, { header: 1 });
+      }
       callback(linhas);
     };
     reader.readAsArrayBuffer(file);
   } else {
-    alert('Formato de arquivo não suportado: ' + ext);
+    showToast('Formato de arquivo não suportado: ' + ext, 'error');
   }
 }
 
-/**
- * Padroniza dados de arquivos para o formato [descricao, valor].
- * NOTA: Usado principalmente para o arquivo de orçamento.
- */
-function padronizarDados(linhas) {
-  // Pula o cabeçalho (slice(1)) e mapeia para o formato esperado.
-  return linhas.slice(1).map(l => [
-    (l[0] || '').trim(), // Descrição
-    parseFloat(l[1]) || 0 // Valor
-  ]).filter(l => l[0] && !isNaN(l[1]));
-}
+function importarTextoBrutoInteligente(texto) {
+  const linhas = texto.split(/\r?\n/).filter(l => l.trim().length > 0);
+  const regexLancamento = /^(\d{2}\/\d{2})\s+(.+?)\s+([\d.,]+)$/m;
+  const anoCorrente = new Date().getFullYear();
+  let dados = [];
 
-// --- LÓGICA DE CONCILIAÇÃO ---
-
-function criarChaveExata(linha) {
-    const desc = (linha.descricao || linha[0] || '').toUpperCase().replace(/\s+/g,' ').trim();
-    const val = (Math.round((linha.valor || linha[1])*100)/100).toFixed(2);
-    return `${desc}_${val}`;
-}
-
-function criarChaveParcial(linha) {
-    const desc = (linha.descricao || linha[0] || '').toUpperCase().replace(/\s+/g,' ').trim();
-    const val = (Math.round((linha.valor || linha[1])*100)/100).toFixed(2);
-    return `${desc.substring(0,8)}_${val}`;
-}
-
-function comparar() {
-    if (!appState.banco.refinado.length || !appState.orcamento.length) {
-        alert("Importe e processe os dados do banco e do orçamento antes de comparar.");
-        return;
+  for (const linha of linhas) {
+    const match = linha.trim().match(regexLancamento);
+    if (match) {
+      const [, dataStr, descricao, valorStr] = match;
+      const dataCompleta = `${dataStr}/${anoCorrente}`;
+      const valorNumerico = parseFloat(valorStr.replace(/\./g, '').replace(',', '.'));
+      const isCredito = /ajuste cred|estorno/i.test(descricao);
+      const valorFinal = isCredito ? valorNumerico : -valorNumerico;
+      dados.push({ data: dataCompleta, descricao: descricao.trim(), valor: valorFinal });
     }
-    toggleSpinner(true);
-    try {
-        const chBancoEx = new Set(appState.banco.refinado.map(criarChaveExata));
-        const chOrcEx = new Set(appState.orcamento.map(criarChaveExata));
-
-        const bancoRest = appState.banco.refinado.filter(l => !chOrcEx.has(criarChaveExata(l)));
-        const orcRest = appState.orcamento.filter(l => !chBancoEx.has(criarChaveExata(l)));
-
-        const chBancoPar = new Set(bancoRest.map(criarChaveParcial));
-        const chOrcPar = new Set(orcRest.map(criarChaveParcial));
-
-        // Guarda as discrepâncias no estado central
-        appState.discrepancias.banco = bancoRest
-            .filter(l => !chOrcPar.has(criarChaveParcial(l)))
-            .map(l => [l.descricao, l.valor]);
-
-        appState.discrepancias.orcamento = orcRest
-            .filter(l => !chBancoPar.has(criarChaveParcial(l)))
-            .map(l => [l[0], l[1]]);
-
-        mostrarTabelaSimples(appState.discrepancias.banco, 'tabelaBanco');
-        mostrarTabelaSimples(appState.discrepancias.orcamento, 'tabelaOrcamento');
-    } catch (error) {
-        console.error("Erro durante a comparação:", error);
-        alert("Ocorreu um erro durante a comparação.");
-    } finally {
-        toggleSpinner(false);
-    }
+  }
+  return dados;
 }
 
-// --- FUNÇÕES DE EXPORTAÇÃO ---
+// --- RENDERIZAÇÃO E EXPORTAÇÃO ---
 
-function exportarXLSX() {
-    if (!appState.banco.refinado.length) { 
-        alert("Nada para exportar. Processe os dados primeiro."); 
-        return; 
-    }
-    toggleSpinner(true);
-    setTimeout(() => {
-        try {
-            const dadosParaPlanilha = appState.banco.refinado.map(linha => ({
-                'Data Ocorrência': linha.data,
-                'Descrição': linha.descricao,
-                'Valor': linha.valor,
-                'Categoria': 'Sem Categoria',
-                'Conta': 'Não Informada'
-            }));
+function mostrarTabelaBanco(dados, id) {
+  const tbl = document.getElementById(id);
+  tbl.innerHTML = '';
+  let header = tbl.insertRow();
+  header.innerHTML = '<th>Data</th><th>Descrição</th><th>Valor (R$)</th>';
 
-            const ws = XLSX.utils.json_to_sheet(dadosParaPlanilha);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Transacoes");
-            XLSX.writeFile(wb, 'importacao_pronta.xlsx');
-        } catch(e) {
-            alert("Erro ao exportar XLSX.");
-            console.error(e);
-        } finally {
-            toggleSpinner(false);
-        }
-    }, 100); // Pequeno timeout para o spinner aparecer
+  if (!dados || !dados.length) {
+    let row = tbl.insertRow();
+    let cell = row.insertCell();
+    cell.colSpan = 3;
+    cell.className = 'no-results';
+    cell.innerText = document.getElementById('textoBanco').value ? 'Nenhum resultado encontrado.' : 'Aguardando dados...';
+  } else {
+    dados.forEach(l => {
+      let row = tbl.insertRow();
+      row.insertCell().innerText = l.data;
+      row.insertCell().innerText = l.descricao;
+      row.insertCell().innerText = l.valor.toFixed(2);
+    });
+  }
+}
+
+function mostrarTabela(dados, id, noResultsMessage = 'Nenhum dado encontrado.') {
+  const tbl = document.getElementById(id);
+  tbl.innerHTML = '';
+  if (!dados) return;
+  let header = tbl.insertRow();
+  header.innerHTML = '<th>Descrição</th><th>Valor (R$)</th>';
+
+  if (!dados.length) {
+    let row = tbl.insertRow();
+    let cell = row.insertCell();
+    cell.colSpan = 2;
+    cell.className = 'no-results';
+    cell.innerText = noResultsMessage;
+  } else {
+    dados.forEach(l => {
+      let row = tbl.insertRow();
+      row.insertCell().innerText = l[0];
+      row.insertCell().innerText = l[1].toFixed(2);
+    });
+  }
+}
+
+
+function exportarXLSX(dados, nomeArquivo) {
+  if (!dados || !dados.length) { 
+    showToast("A lista de transações está vazia ou o filtro não retornou resultados.", 'error'); 
+    return; 
+  }
+  
+  const dadosParaPlanilha = dados.map(linha => ({
+    'Data Ocorrência': linha.data,
+    'Descrição': linha.descricao,
+    'Valor': linha.valor,
+    'Categoria': 'Sem Categoria',
+    'Conta': 'Não Informada'
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(dadosParaPlanilha);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Transacoes");
+  XLSX.writeFile(wb, nomeArquivo);
+  showToast('Planilha exportada com sucesso!', 'success');
 }
 
 function exportarCSV(dados, nomeArquivo) {
-  if (!dados.length) { alert("Nada para exportar."); return; }
+  if (!dados || !dados.length) { 
+    showToast("Não há discrepâncias para exportar.", 'error'); 
+    return; 
+  }
   let conteudo = 'Descrição,Valor\n' + dados.map(l => `"${l[0]}",${l[1]}`).join('\n');
   let blob = new Blob([conteudo], { type: 'text/csv;charset=utf-8;' });
   let link = document.createElement("a");
@@ -238,105 +171,128 @@ function exportarCSV(dados, nomeArquivo) {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  showToast(`Arquivo ${nomeArquivo} gerado!`, 'success');
+}
+
+
+// --- LÓGICA DE CONCILIAÇÃO ---
+
+function padronizarDados(linhas) {
+  return linhas.slice(1).map(l => [
+    (l[0] || '').trim(),
+    parseFloat(String(l[1]).replace(',', '.')) || 0
+  ]).filter(l => l[0] && !isNaN(l[1]));
+}
+
+function criarChaveExata(linha) {
+  const desc = String(linha[0]).toUpperCase().replace(/\s+/g,' ').trim();
+  const val = (Math.round(linha[1]*100)/100).toFixed(2);
+  return `${desc}_${val}`;
+}
+
+function criarChaveParcial(linha) {
+  const desc = String(linha[0]).toUpperCase().replace(/\s+/g,' ').trim();
+  const val = (Math.round(linha[1]*100)/100).toFixed(2);
+  return `${desc.substring(0,8)}_${val}`;
+}
+
+function comparar() {
+  if (!dadosBanco.length || !dadosOrcamento.length) {
+    showToast("Importe os dados do banco e do orçamento antes de comparar.", 'error');
+    return;
+  }
+  
+  const dadosBancoConciliacao = dadosBanco.map(l => [l.descricao, l.valor]);
+
+  const chBancoEx = new Set(dadosBancoConciliacao.map(criarChaveExata));
+  const chOrcEx = new Set(dadosOrcamento.map(criarChaveExata));
+  
+  const bancoRest = dadosBancoConciliacao.filter(l => !chOrcEx.has(criarChaveExata(l)));
+  const orcRest = dadosOrcamento.filter(l => !chBancoEx.has(criarChaveExata(l)));
+  
+  const chBancoPar = new Set(bancoRest.map(criarChaveParcial));
+  const chOrcPar = new Set(orcRest.map(criarChaveParcial));
+  
+  discrepBanco = bancoRest.filter(l => !chOrcPar.has(criarChaveParcial(l)));
+  discrepOrc = orcRest.filter(l => !chBancoPar.has(criarChaveParcial(l)));
+  
+  mostrarTabela(discrepBanco, 'tabelaBanco', 'Nenhuma discrepância encontrada no extrato do banco.');
+  mostrarTabela(discrepOrc, 'tabelaOrcamento', 'Nenhuma discrepância encontrada no orçamento.');
+  showToast('Comparação concluída!', 'success');
 }
 
 
 // --- EVENT LISTENERS ---
 
+document.getElementById('btnNovaConciliacao').addEventListener('click', resetApplication);
+
+document.getElementById('btnProcessarTexto').addEventListener('click', () => {
+  const texto = document.getElementById('textoBanco').value;
+  if (!texto.trim()) {
+    showToast("Cole o extrato bruto antes de processar.", 'error');
+    return;
+  }
+  dadosBancoOriginais = importarTextoBrutoInteligente(texto);
+  dadosBanco = [...dadosBancoOriginais];
+  mostrarTabelaBanco(dadosBanco, 'previewBanco');
+  if (dadosBanco.length > 0) {
+    document.getElementById('painelRefinamento').style.display = 'block';
+    showToast(`Foram encontrados ${dadosBanco.length} lançamentos.`, 'info');
+  } else {
+    showToast(`Nenhum lançamento válido encontrado no texto. Verifique o formato.`, 'error');
+  }
+});
+
+document.getElementById('btnRefinarDados').addEventListener('click', () => {
+    const filtroDataInicio = document.getElementById('filtroDataInicio').value;
+    const novaDataLancamentoStr = document.getElementById('novaDataLancamento').value;
+
+    if (!filtroDataInicio) {
+        showToast('Selecione a data de início para filtrar.', 'error');
+        return;
+    }
+
+    const filtroDate = new Date(filtroDataInicio + 'T00:00:00');
+    let dadosFiltrados = dadosBancoOriginais.filter(l => {
+        const [dia, mes, ano] = l.data.split('/');
+        const dataLancamento = new Date(`${ano}-${mes}-${dia}T00:00:00`);
+        return dataLancamento >= filtroDate;
+    });
+
+    if (novaDataLancamentoStr) {
+        const [ano, mes, dia] = novaDataLancamentoStr.split('-');
+        const novaDataFormatada = `${dia}/${mes}/${ano}`;
+        dadosFiltrados = dadosFiltrados.map(l => ({ ...l, data: novaDataFormatada }));
+    }
+
+    dadosBanco = dadosFiltrados;
+    mostrarTabelaBanco(dadosBanco, 'previewBanco');
+    showToast('Filtro aplicado com sucesso!', 'success');
+});
+
+document.getElementById('btnExportarPlanilha').addEventListener('click', () => {
+  exportarXLSX(dadosBanco, 'importacao_pronta.xlsx');
+});
+
+document.getElementById('fileBanco').addEventListener('change', e => {
+  lerArquivo(e.target.files[0], linhas => {
+    showToast('Importação de arquivo ainda não integrada com o novo fluxo.', 'info');
+    // Implementação futura: padronizar para o formato {data, descricao, valor}
+  });
+});
+
+document.getElementById('fileOrcamento').addEventListener('change', e => {
+  lerArquivo(e.target.files[0], linhas => {
+    dadosOrcamento = padronizarDados(linhas);
+    mostrarTabela(dadosOrcamento, 'previewOrcamento', 'Orçamento importado. Pronto para comparar.');
+    showToast(`Orçamento com ${dadosOrcamento.length} itens importado.`, 'success');
+  });
+});
+
+document.getElementById('btnComparar').addEventListener('click', comparar);
+
+// --- INICIALIZAÇÃO ---
 document.addEventListener('DOMContentLoaded', () => {
-
-    // Processar Texto Bruto
-    document.getElementById('btnProcessarTexto').addEventListener('click', () => {
-        const texto = document.getElementById('textoBanco').value;
-        if (!texto.trim()) {
-            alert("Por favor, cole o extrato bruto antes de processar.");
-            return;
-        }
-        toggleSpinner(true);
-        setTimeout(() => { // Timeout para garantir que a UI atualize e mostre o spinner
-            try {
-                appState.banco.original = importarTextoBrutoInteligente(texto);
-                appState.banco.refinado = [...appState.banco.original]; // Clona para manipulação
-                
-                mostrarTabelaBanco(appState.banco.refinado, 'previewBanco');
-                
-                // Exibe o painel de refinamento
-                document.getElementById('painelRefinamento').classList.remove('hidden');
-            } catch (error) {
-                console.error("Erro ao processar texto:", error);
-                alert("Ocorreu um erro ao processar o texto. Verifique o formato.");
-            } finally {
-                toggleSpinner(false);
-            }
-        }, 100);
-    });
-
-    // Refinar Dados
-    document.getElementById('btnRefinarDados').addEventListener('click', () => {
-        const filtroDataInicioStr = document.getElementById('filtroDataInicio').value;
-        const novaDataLancamentoStr = document.getElementById('novaDataLancamento').value;
-
-        if (!filtroDataInicioStr) {
-            alert('Por favor, selecione a data de início para filtrar.');
-            return;
-        }
-        
-        toggleSpinner(true);
-        setTimeout(() => {
-            try {
-                // Filtra os dados originais
-                const filtroDate = new Date(filtroDataInicioStr + 'T00:00:00');
-                let dadosFiltrados = appState.banco.original.filter(l => {
-                    const [dia, mes, ano] = l.data.split('/');
-                    const dataLancamento = new Date(`${ano}-${mes}-${dia}T00:00:00`);
-                    return dataLancamento >= filtroDate;
-                });
-
-                // Se uma nova data foi fornecida, aplica a todos os itens filtrados
-                if (novaDataLancamentoStr) {
-                    const [ano, mes, dia] = novaDataLancamentoStr.split('-');
-                    const novaDataFormatada = `${dia}/${mes}/${ano}`;
-                    dadosFiltrados = dadosFiltrados.map(l => ({
-                        ...l,
-                        data: novaDataFormatada
-                    }));
-                }
-
-                // Atualiza o estado e a tabela
-                appState.banco.refinado = dadosFiltrados;
-                mostrarTabelaBanco(appState.banco.refinado, 'previewBanco');
-            } catch (error) {
-                console.error("Erro ao refinar dados:", error);
-                alert("Ocorreu um erro ao refinar os dados.");
-            } finally {
-                toggleSpinner(false);
-            }
-        }, 100);
-    });
-    
-    // Importação de arquivo do Banco
-    document.getElementById('fileBanco').addEventListener('change', e => {
-      // NOTE: Este fluxo precisa ser melhorado para se alinhar com a nova estrutura de dados.
-      // Por ora, ele ainda usa a lógica antiga.
-      alert("Função de importação de arquivo do banco ainda usa a lógica antiga. Foco no processamento de texto bruto.");
-    });
-    
-    // Importação de arquivo do Orçamento
-    document.getElementById('fileOrcamento').addEventListener('change', e => {
-        toggleSpinner(true);
-        lerArquivo(e.target.files[0], linhas => {
-            appState.orcamento = padronizarDados(linhas);
-            mostrarTabelaSimples(appState.orcamento, 'previewOrcamento');
-            toggleSpinner(false);
-        });
-    });
-
-    // Botões de Ação
-    document.getElementById('btnComparar').addEventListener('click', comparar);
-    document.getElementById('btnExportarPlanilha').addEventListener('click', exportarXLSX);
-    document.getElementById('btnExportarDiscrepBanco').addEventListener('click', () => exportarCSV(appState.discrepancias.banco, 'discrepancias_banco.csv'));
-    document.getElementById('btnExportarDiscrepOrc').addEventListener('click', () => exportarCSV(appState.discrepancias.orcamento, 'discrepancias_orcamento.csv'));
-
-    // Inicia com o spinner desligado
-    toggleSpinner(false);
+  resetApplication();
+  showToast('Bem-vindo à Ferramenta de Conciliação!', 'info');
 });
