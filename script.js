@@ -17,29 +17,21 @@ function showToast(message, type = 'info') {
 
 // --- FUNÇÕES DE RESET ---
 function resetApplication() {
-  // Limpa variáveis de estado
   dadosBanco = [];
   dadosOrcamento = [];
   dadosBancoOriginais = [];
   discrepBanco = [];
   discrepOrc = [];
-
-  // Limpa campos da interface
   document.getElementById('textoBanco').value = '';
   document.getElementById('fileBanco').value = '';
   document.getElementById('fileOrcamento').value = '';
   document.getElementById('filtroDataInicio').value = '';
   document.getElementById('novaDataLancamento').value = '';
-
-  // Limpa todas as tabelas
   mostrarTabelaBanco([], 'previewBanco');
   mostrarTabela([], 'previewOrcamento', 'Nenhum orçamento importado.');
   mostrarTabela([], 'tabelaBanco', 'Nenhuma discrepância encontrada.');
   mostrarTabela([], 'tabelaOrcamento', 'Nenhuma discrepância encontrada.');
-  
-  // Oculta painel de refinamento
   document.getElementById('painelRefinamento').style.display = 'none';
-  
   showToast('Sessão limpa. Pronto para uma nova conciliação!', 'success');
 }
 
@@ -69,25 +61,29 @@ function lerArquivo(file, callback) {
   }
 }
 
+// ***** FUNÇÃO CORRIGIDA PARA MÁXIMA COMPATIBILIDADE *****
 function importarTextoBrutoInteligente(texto) {
-  const linhas = texto.split(/\r?\n/).filter(l => l.trim().length > 0);
-  const regexLancamento = /^(\d{2}\/\d{2})\s+(.+?)\s+([\d.,]+)$/m;
+  // Regex com flags global (/g) e multiline (/m) para buscar todas as ocorrências no texto
+  const regexLancamento = /^(\d{2}\/\d{2})\s+(.+?)\s+([\d.,]+)$/gm;
   const anoCorrente = new Date().getFullYear();
   let dados = [];
+  let match;
 
-  for (const linha of linhas) {
-    const match = linha.trim().match(regexLancamento);
-    if (match) {
-      const [, dataStr, descricao, valorStr] = match;
-      const dataCompleta = `${dataStr}/${anoCorrente}`;
-      const valorNumerico = parseFloat(valorStr.replace(/\./g, '').replace(',', '.'));
-      const isCredito = /ajuste cred|estorno/i.test(descricao);
-      const valorFinal = isCredito ? valorNumerico : -valorNumerico;
-      dados.push({ data: dataCompleta, descricao: descricao.trim(), valor: valorFinal });
-    }
+  // Loop while com .exec() é a forma mais robusta de iterar sobre matches
+  while ((match = regexLancamento.exec(texto)) !== null) {
+    // match[0] é a linha inteira, match[1], [2], [3] são os grupos capturados
+    const [, dataStr, descricao, valorStr] = match;
+    
+    const dataCompleta = `${dataStr}/${anoCorrente}`;
+    const valorNumerico = parseFloat(valorStr.replace(/\./g, '').replace(',', '.'));
+    const isCredito = /ajuste cred|estorno/i.test(descricao);
+    const valorFinal = isCredito ? valorNumerico : -valorNumerico;
+
+    dados.push({ data: dataCompleta, descricao: descricao.trim(), valor: valorFinal });
   }
   return dados;
 }
+
 
 // --- RENDERIZAÇÃO E EXPORTAÇÃO ---
 
@@ -102,7 +98,7 @@ function mostrarTabelaBanco(dados, id) {
     let cell = row.insertCell();
     cell.colSpan = 3;
     cell.className = 'no-results';
-    cell.innerText = document.getElementById('textoBanco').value ? 'Nenhum resultado encontrado.' : 'Aguardando dados...';
+    cell.innerText = document.getElementById('textoBanco').value.trim() ? 'Nenhum lançamento válido encontrado.' : 'Aguardando dados...';
   } else {
     dados.forEach(l => {
       let row = tbl.insertRow();
@@ -135,10 +131,9 @@ function mostrarTabela(dados, id, noResultsMessage = 'Nenhum dado encontrado.') 
   }
 }
 
-
 function exportarXLSX(dados, nomeArquivo) {
   if (!dados || !dados.length) { 
-    showToast("A lista de transações está vazia ou o filtro não retornou resultados.", 'error'); 
+    showToast("A lista de transações está vazia.", 'error'); 
     return; 
   }
   
@@ -174,7 +169,6 @@ function exportarCSV(dados, nomeArquivo) {
   showToast(`Arquivo ${nomeArquivo} gerado!`, 'success');
 }
 
-
 // --- LÓGICA DE CONCILIAÇÃO ---
 
 function padronizarDados(linhas) {
@@ -203,24 +197,18 @@ function comparar() {
   }
   
   const dadosBancoConciliacao = dadosBanco.map(l => [l.descricao, l.valor]);
-
   const chBancoEx = new Set(dadosBancoConciliacao.map(criarChaveExata));
   const chOrcEx = new Set(dadosOrcamento.map(criarChaveExata));
-  
   const bancoRest = dadosBancoConciliacao.filter(l => !chOrcEx.has(criarChaveExata(l)));
   const orcRest = dadosOrcamento.filter(l => !chBancoEx.has(criarChaveExata(l)));
-  
   const chBancoPar = new Set(bancoRest.map(criarChaveParcial));
   const chOrcPar = new Set(orcRest.map(criarChaveParcial));
-  
   discrepBanco = bancoRest.filter(l => !chOrcPar.has(criarChaveParcial(l)));
   discrepOrc = orcRest.filter(l => !chBancoPar.has(criarChaveParcial(l)));
-  
-  mostrarTabela(discrepBanco, 'tabelaBanco', 'Nenhuma discrepância encontrada no extrato do banco.');
-  mostrarTabela(discrepOrc, 'tabelaOrcamento', 'Nenhuma discrepância encontrada no orçamento.');
+  mostrarTabela(discrepBanco, 'tabelaBanco', 'Nenhuma discrepância encontrada.');
+  mostrarTabela(discrepOrc, 'tabelaOrcamento', 'Nenhuma discrepância encontrada.');
   showToast('Comparação concluída!', 'success');
 }
-
 
 // --- EVENT LISTENERS ---
 
@@ -235,6 +223,7 @@ document.getElementById('btnProcessarTexto').addEventListener('click', () => {
   dadosBancoOriginais = importarTextoBrutoInteligente(texto);
   dadosBanco = [...dadosBancoOriginais];
   mostrarTabelaBanco(dadosBanco, 'previewBanco');
+  
   if (dadosBanco.length > 0) {
     document.getElementById('painelRefinamento').style.display = 'block';
     showToast(`Foram encontrados ${dadosBanco.length} lançamentos.`, 'info');
@@ -277,7 +266,6 @@ document.getElementById('btnExportarPlanilha').addEventListener('click', () => {
 document.getElementById('fileBanco').addEventListener('change', e => {
   lerArquivo(e.target.files[0], linhas => {
     showToast('Importação de arquivo ainda não integrada com o novo fluxo.', 'info');
-    // Implementação futura: padronizar para o formato {data, descricao, valor}
   });
 });
 
