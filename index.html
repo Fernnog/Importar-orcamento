@@ -73,14 +73,6 @@
     </div>
   </section>
 
-  <section id="sugestoesPanel" class="panel hidden">
-    <h2>💡 Sugestões de Pareamento</h2>
-    <p>Encontramos pares prováveis. Confirme ou rejeite as sugestões abaixo.</p>
-    <table id="tabelaSugestoes">
-      <!-- O conteúdo será gerado dinamicamente pelo JavaScript -->
-    </table>
-  </section>
-
   <section class="discrepancy-section">
     <h2>Discrepâncias - Banco</h2>
     <button id="btnExportarDiscrepBanco" class="btn-export">Exportar CSV</button>
@@ -106,9 +98,7 @@
   <div class="spinner"></div>
 </div>
 
-<!-- Bibliotecas externas para parsing e fuzzy matching -->
-<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0"></script>
+<!-- A biblioteca XLSX não é mais carregada aqui. script.js cuidará disso. -->
 <script src="script.js" defer></script>
 </body>
 </html>
