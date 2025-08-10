@@ -1,12 +1,12 @@
 body {
   font-family: Arial, sans-serif;
   margin: 0;
-  background-color: #f0f2f5;
-  color: #333;
+  background-color: #f8f9fa; /* Um cinza mais claro e moderno */
+  color: #34495e; /* Um azul-acinzentado escuro para texto */
 }
 
 header {
-  background-color: #2c3e50;
+  background-color: #004d40; /* Verde escuro e sóbrio, do centro do logo */
   color: white;
   padding: 15px 20px;
   text-align: center;
@@ -40,13 +40,14 @@ main {
   padding: 20px;
   border-radius: 8px;
   box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  border: 1px solid #e9ecef; /* Adiciona uma borda sutil aos painéis */
 }
 
 h2 {
   margin-top: 0;
-  border-bottom: 2px solid #ecf0f1;
+  border-bottom: 2px solid #e9ecef; /* Borda mais suave */
   padding-bottom: 10px;
-  color: #2c3e50;
+  color: #004d40; /* Mesmo verde do header para consistência */
 }
 
 textarea {
@@ -76,11 +77,11 @@ th, td {
 }
 
 th {
-  background-color: #f7f7f7;
+  background-color: #f8f9fa;
 }
 
 button {
-  background-color: #3498db;
+  background-color: #2980b9; /* Azul vibrante do logo */
   border: none;
   color: white;
   padding: 10px 16px;
@@ -93,7 +94,7 @@ button {
 }
 
 button:hover {
-  background-color: #2980b9;
+  background-color: #2471a3; /* Tom mais escuro do azul para hover */
 }
 
 button:disabled {
@@ -102,15 +103,15 @@ button:disabled {
 }
 
 .btn-header {
-  background-color: #95a5a6;
+  background-color: #1f618d; /* Um azul mais contido para o header */
   margin: 0;
 }
 .btn-header:hover {
-  background-color: #7f8c8d;
+  background-color: #1a5276;
 }
 
 .btn-export {
-  background-color: #27ae60;
+  background-color: #27ae60; /* Verde do logo, perfeito para exportação */
 }
 .btn-export:hover {
   background-color: #229954;
@@ -126,10 +127,10 @@ button:disabled {
     padding: 12px 30px;
     font-size: 16px;
     font-weight: bold;
-    background-color: #e67e22;
+    background-color: #c2185b; /* Magenta/rosa forte do logo para destaque */
 }
 .action-center button:hover {
-    background-color: #d35400;
+    background-color: #a3154c; /* Tom mais escuro do magenta para hover */
 }
 
 .discrepancy-section {
@@ -188,11 +189,11 @@ footer {
   border: 1px solid #ccc;
 }
 #btnRefinarDados {
-  background-color: #e67e22;
+  background-color: #c2185b; /* Magenta/rosa forte do logo para destaque */
   width: 100%;
 }
 #btnRefinarDados:hover {
-  background-color: #d35400;
+  background-color: #a3154c; /* Tom mais escuro do magenta para hover */
 }
 
 /* --- SISTEMA DE NOTIFICAÇÃO (TOAST) --- */
@@ -215,9 +216,9 @@ footer {
   transform: translateX(100%);
   animation: slideIn 0.5s forwards, fadeOut 0.5s 4.5s forwards;
 }
-.toast.info { background-color: #3498db; }
-.toast.success { background-color: #2ecc71; }
-.toast.error { background-color: #e74c3c; }
+.toast.info { background-color: #2980b9; } /* Azul primário */
+.toast.success { background-color: #27ae60; } /* Verde de sucesso */
+.toast.error { background-color: #c0392b; } /* Vermelho para erro */
 @keyframes slideIn {
   to { opacity: 1; transform: translateX(0); }
 }
@@ -241,7 +242,7 @@ footer {
 }
 .spinner {
   border: 8px solid #f3f3f3;
-  border-top: 8px solid #3498db;
+  border-top: 8px solid #2980b9; /* Spinner com a cor azul primária */
   border-radius: 50%;
   width: 60px;
   height: 60px;
