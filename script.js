@@ -8,9 +8,71 @@ const appState = {
   possibleMatches: [],
 };
 
-// --- ELEMENTOS DO DOM (CACHE PARA PERFORMANCE) ---
-// Declarado aqui, mas populado apenas quando o DOM estiver pronto.
-const DOM = {};
+const RULE_STORAGE_KEY = 'conciliacaoRegras';
+const DOM = {}; // Cache de elementos do DOM
+
+// --- FUNÇÕES DE GERENCIAMENTO DE REGRAS ---
+function getRules() {
+  return JSON.parse(localStorage.getItem(RULE_STORAGE_KEY)) || [];
+}
+
+function saveRule(bancoDesc, orcDesc) {
+  const rules = getRules();
+  if (!rules.some(r => r.banco === bancoDesc && r.orc === orcDesc)) {
+    rules.push({ banco: bancoDesc, orc: orcDesc });
+    localStorage.setItem(RULE_STORAGE_KEY, JSON.stringify(rules));
+    showToast('Regra salva com sucesso!', 'success');
+    return true;
+  }
+  showToast('Esta regra já existe.', 'info');
+  return false;
+}
+
+function deleteRule(bancoDesc, orcDesc) {
+    let rules = getRules();
+    rules = rules.filter(r => r.banco !== bancoDesc || r.orc !== orcDesc);
+    localStorage.setItem(RULE_STORAGE_KEY, JSON.stringify(rules));
+}
+
+function exportarRegras() {
+    const rules = getRules();
+    if (rules.length === 0) {
+        showToast("Nenhuma regra para exportar.", "info");
+        return;
+    }
+    const blob = new Blob([JSON.stringify(rules, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'regras_conciliacao.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("Arquivo de regras exportado!", "success");
+}
+
+function importarRegras(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const rules = JSON.parse(e.target.result);
+            if (!Array.isArray(rules) || !rules.every(r => 'banco' in r && 'orc' in r)) {
+                throw new Error("Formato de arquivo inválido.");
+            }
+            localStorage.setItem(RULE_STORAGE_KEY, JSON.stringify(rules));
+            showToast(`${rules.length} regras importadas com sucesso!`, "success");
+            if (!DOM.regrasModal.classList.contains('hidden')) {
+                DOM.btnGerenciarRegras.click(); // Simula clique para fechar
+                DOM.btnGerenciarRegras.click(); // e reabrir, atualizando a lista
+            }
+        } catch (error) {
+            showToast("Erro ao importar regras: " + error.message, "error");
+        }
+    };
+    reader.readAsText(file);
+}
 
 // --- FUNÇÕES DE LÓGICA DE SUGESTÃO ---
 function normalizeText(s = '') {
@@ -46,7 +108,6 @@ function levenshteinDistance(a = '', b = '') {
 
 function encontrarPossiveisMatches(bancoRest, orcRest) {
   const suggestions = new Map();
-  
   bancoRest.forEach((bancoItem) => {
     orcRest.forEach((orcItem) => {
       const valorBanco = Math.round(bancoItem.valor * 100);
@@ -68,7 +129,6 @@ function encontrarPossiveisMatches(bancoRest, orcRest) {
       }
     });
   });
-  
   const possible = Array.from(suggestions.values());
   possible.sort((a, b) => b.score - a.score);
   return possible;
@@ -122,6 +182,7 @@ function renderPossibleMatches() {
         actionCell.className = 'possible-match-actions';
         actionCell.innerHTML = `
             <button class="btn-accept" title="Confirmar conciliação">✓</button>
+            <button class="btn-save-rule" title="Confirmar e Salvar Regra para o futuro">✓+</button>
             <button class="btn-reject" title="Marcar como discrepância">✕</button>
         `;
     });
@@ -137,10 +198,13 @@ function handleMatchAction(e) {
     
     const matchIndex = parseInt(tr.dataset.matchIndex, 10);
     const match = appState.possibleMatches[matchIndex];
-
     if (!match) return;
 
-    if (button.classList.contains('btn-accept')) {
+    const shouldSaveRule = button.classList.contains('btn-save-rule');
+    if (button.classList.contains('btn-accept') || shouldSaveRule) {
+        if (shouldSaveRule) {
+            saveRule(match.bancoItem.descricao, match.orcItem.descricao);
+        }
         appState.dadosBanco = appState.dadosBanco.filter(item => item !== match.bancoItem);
         appState.dadosOrcamento = appState.dadosOrcamento.filter(item => item !== match.orcItem);
         showToast('Conciliação confirmada!', 'success');
@@ -163,30 +227,66 @@ function comparar() {
     return;
   }
   
-  // PASSO 1: Conciliação exata
-  const chavesOrcamentoExatas = new Set(appState.dadosOrcamento.map(criarChaveItem));
-  const bancoConciliados = new Set();
-  const orcamentoConciliados = new Set();
+  let totalConciliados = 0;
+  let bancoRestante = [...appState.dadosBanco];
+  let orcRestante = [...appState.dadosOrcamento];
 
-  appState.dadosBanco.forEach(bancoItem => {
+  // PASSO 0: Aplicar regras salvas
+  const regras = getRules();
+  if (regras.length > 0) {
+      const regrasMap = new Map(regras.map(r => [r.banco, r.orc]));
+      const orcMap = new Map();
+      orcRestante.forEach(o => {
+          if (!orcMap.has(o.descricao)) orcMap.set(o.descricao, []);
+          orcMap.get(o.descricao).push(o);
+      });
+      
+      const bancoConciliadosRegras = new Set();
+      bancoRestante.forEach(bancoItem => {
+          const orcDescRegra = regrasMap.get(bancoItem.descricao);
+          if (orcDescRegra && orcMap.has(orcDescRegra)) {
+              const orcCandidates = orcMap.get(orcDescRegra);
+              const orcItemIndex = orcCandidates.findIndex(o => Math.round(bancoItem.valor * 100) === Math.round(o.valor * 100));
+              if (orcItemIndex > -1) {
+                  const orcItem = orcCandidates.splice(orcItemIndex, 1)[0];
+                  bancoConciliadosRegras.add(bancoItem);
+                  totalConciliados++;
+                  // Se o array de candidatos ficou vazio, remove a chave
+                  if (orcCandidates.length === 0) orcMap.delete(orcDescRegra);
+              }
+          }
+      });
+
+      if (bancoConciliadosRegras.size > 0) {
+          bancoRestante = bancoRestante.filter(i => !bancoConciliadosRegras.has(i));
+          orcRestante = Array.from(orcMap.values()).flat();
+          showToast(`${bancoConciliadosRegras.size} itens conciliados por regras automáticas.`, 'info');
+      }
+  }
+
+  // PASSO 1: Conciliação exata
+  const chavesOrcamentoExatas = new Map();
+  orcRestante.forEach(o => {
+      const chave = criarChaveItem(o);
+      if(!chavesOrcamentoExatas.has(chave)) chavesOrcamentoExatas.set(chave, []);
+      chavesOrcamentoExatas.get(chave).push(o);
+  });
+  
+  const bancoConciliadosExatos = new Set();
+  bancoRestante.forEach(bancoItem => {
     const chave = criarChaveItem(bancoItem);
     if (chavesOrcamentoExatas.has(chave)) {
-      chavesOrcamentoExatas.delete(chave);
-      bancoConciliados.add(bancoItem);
+        const orcCandidates = chavesOrcamentoExatas.get(chave);
+        if (orcCandidates.length > 0) {
+            orcCandidates.shift(); // Remove um item do orçamento da lista de candidatos
+            bancoConciliadosExatos.add(bancoItem);
+            totalConciliados++;
+        }
     }
   });
 
-  const chavesBancoConciliadas = new Set(Array.from(bancoConciliados).map(criarChaveItem));
-  appState.dadosOrcamento.forEach(orcItem => {
-      const chave = criarChaveItem(orcItem);
-      if(chavesBancoConciliadas.has(chave)){
-          chavesBancoConciliadas.delete(chave);
-          orcamentoConciliados.add(orcItem);
-      }
-  });
-
-  let bancoRestante = appState.dadosBanco.filter(item => !bancoConciliados.has(item));
-  let orcRestante = appState.dadosOrcamento.filter(item => !orcamentoConciliados.has(item));
+  bancoRestante = bancoRestante.filter(item => !bancoConciliadosExatos.has(item));
+  orcRestante = Array.from(chavesOrcamentoExatas.values()).flat();
 
   // PASSO 2: Encontrar e APRESENTAR possíveis matches
   if (!appState.possibleMatches.length) {
@@ -196,13 +296,10 @@ function comparar() {
   if (appState.possibleMatches.length > 0) {
       renderPossibleMatches();
       showToast(`Encontramos ${appState.possibleMatches.length} possíveis conciliações para sua revisão.`, 'info');
-      
-      const reconciledCount = appState.dadosBancoOriginais.length - bancoRestante.length;
-      animateCounter(DOM.summaryReconciled, 0, reconciledCount, 750);
+      animateCounter(DOM.summaryReconciled, 0, totalConciliados, 750);
       animateCounter(DOM.summaryBank, 0, 0, 750);
       animateCounter(DOM.summaryBudget, 0, 0, 750);
       DOM.summaryPanel.classList.remove('hidden');
-
       mostrarTabela([], 'tabelaBanco', 'Revise as possíveis coincidências acima.');
       mostrarTabela([], 'tabelaOrcamento', 'Revise as possíveis coincidências acima.');
       return; 
@@ -220,8 +317,7 @@ function comparar() {
       .filter(item => !chavesBancoParciais.has(criarChaveParcialItem(item)));
 
   // PASSO 4: Atualiza o resumo e as tabelas de discrepâncias
-  const reconciledCountFinal = appState.dadosBancoOriginais.length - appState.discrepBanco.length;
-  animateCounter(DOM.summaryReconciled, 0, reconciledCountFinal, 750);
+  animateCounter(DOM.summaryReconciled, 0, totalConciliados, 750);
   animateCounter(DOM.summaryBank, 0, appState.discrepBanco.length, 750);
   animateCounter(DOM.summaryBudget, 0, appState.discrepOrc.length, 750);
   DOM.summaryPanel.classList.remove('hidden');
@@ -433,78 +529,45 @@ function exportarCSV(dados, nomeArquivo) {
 }
 
 // --- FUNÇÕES DE DRAG-AND-DROP ---
-function handleDragStart(e) {
-    e.target.classList.add('dragging');
-    e.dataTransfer.setData('text/plain', e.target.dataset.matchIndex);
-    e.dataTransfer.effectAllowed = 'move';
-}
-
-function handleDragEnd(e) {
-    e.target.classList.remove('dragging');
-}
-
-function handleDragOver(e) {
-    e.preventDefault(); 
-    if (e.target.closest('.metric-item')) {
-        e.target.closest('.metric-item').classList.add('drop-target-hover');
-    }
-}
-
-function handleDragLeave(e) {
-    if (e.target.closest('.metric-item')) {
-        e.target.closest('.metric-item').classList.remove('drop-target-hover');
-    }
-}
-
+function handleDragStart(e) { e.target.classList.add('dragging'); e.dataTransfer.setData('text/plain', e.target.dataset.matchIndex); e.dataTransfer.effectAllowed = 'move'; }
+function handleDragEnd(e) { e.target.classList.remove('dragging'); }
+function handleDragOver(e) { e.preventDefault(); if (e.target.closest('.metric-item')) e.target.closest('.metric-item').classList.add('drop-target-hover'); }
+function handleDragLeave(e) { if (e.target.closest('.metric-item')) e.target.closest('.metric-item').classList.remove('drop-target-hover'); }
 function handleDrop(e) {
     e.preventDefault();
     const dropZone = e.target.closest('.metric-item');
     if (!dropZone) return;
-
     dropZone.classList.remove('drop-target-hover');
     const matchIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
     const match = appState.possibleMatches[matchIndex];
-
     if (!match) return;
-
-    const targetType = dropZone.dataset.dropTarget;
-
-    if (targetType === 'reconciled') {
+    if (dropZone.dataset.dropTarget === 'reconciled') {
         appState.dadosBanco = appState.dadosBanco.filter(item => item !== match.bancoItem);
         appState.dadosOrcamento = appState.dadosOrcamento.filter(item => item !== match.orcItem);
         showToast('Conciliação confirmada via Arrastar e Soltar!', 'success');
     } else {
         showToast('Sugestão marcada como discrepância.', 'info');
     }
-
     appState.possibleMatches.splice(matchIndex, 1);
     comparar();
 }
 
 function handleDiscrepancyDeletion(e) {
     if (e.target.tagName !== 'INPUT' || e.target.type !== 'checkbox') return;
-
     const keyToDelete = e.target.dataset.key;
     if (!confirm(`Tem certeza que deseja apagar TODOS os lançamentos com a chave "${keyToDelete.replace('_', ' | R$ ')}"? Esta ação é irreversível e removerá o item de todas as listas.`)) {
         e.target.checked = false;
         return;
     }
-    
     showSpinner();
-    
     appState.dadosBanco = appState.dadosBanco.filter(item => criarChaveItem(item) !== keyToDelete);
     appState.dadosBancoOriginais = appState.dadosBancoOriginais.filter(item => criarChaveItem(item) !== keyToDelete);
     appState.dadosOrcamento = appState.dadosOrcamento.filter(item => criarChaveItem(item) !== keyToDelete);
-    
     showToast('Item removido. Reanalisando...', 'info');
-    
     appState.possibleMatches = [];
     comparar();
-
-    // Atualiza as previews também
     mostrarTabelaBanco(appState.dadosBanco, 'previewBanco');
     mostrarTabela(appState.dadosOrcamento, 'previewOrcamento', 'Orçamento importado. Pronto para comparar.');
-
     hideSpinner();
 }
 
@@ -538,6 +601,14 @@ document.addEventListener('DOMContentLoaded', () => {
     possibleMatchesTbl: document.getElementById('possibleMatchesTbl'),
     btnAutoMatchHighConfidence: document.getElementById('btnAutoMatchHighConfidence'),
     btnIgnoreAllPossible: document.getElementById('btnIgnoreAllPossible'),
+    // Modal de Regras
+    btnGerenciarRegras: document.getElementById('btnGerenciarRegras'),
+    regrasModal: document.getElementById('regrasModal'),
+    listaRegras: document.getElementById('listaRegras'),
+    regrasModalPlaceholder: document.getElementById('regrasModalPlaceholder'),
+    btnExportarRegras: document.getElementById('btnExportarRegras'),
+    btnImportarRegras: document.getElementById('btnImportarRegras'),
+    importFile: document.getElementById('importFile')
   });
 
   const dropTargets = document.querySelectorAll('.summary-panel .metric-item');
@@ -546,9 +617,7 @@ document.addEventListener('DOMContentLoaded', () => {
       target.addEventListener('dragleave', handleDragLeave);
       target.addEventListener('drop', handleDrop);
   });
-
   DOM.btnNovaConciliacao.addEventListener('click', resetApplication);
-
   DOM.btnProcessarTexto.addEventListener('click', () => {
     const texto = DOM.textoBanco.value;
     if (!texto.trim()) { showToast("Cole o extrato bruto antes de processar.", 'error'); return; }
@@ -562,7 +631,6 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast(`Nenhum lançamento válido encontrado. Verifique o formato.`, 'error');
     }
   });
-
   DOM.btnRefinarDados.addEventListener('click', () => {
     if (!DOM.filtroDataInicio.value) { showToast('Selecione a data de início para filtrar.', 'error'); return; }
     const filtroDate = new Date(DOM.filtroDataInicio.value + 'T00:00:00');
@@ -578,37 +646,22 @@ document.addEventListener('DOMContentLoaded', () => {
     mostrarTabelaBanco(appState.dadosBanco, 'previewBanco');
     showToast('Filtro aplicado com sucesso!', 'success');
   });
-
   DOM.btnExportarPlanilha.addEventListener('click', () => exportarXLSX(appState.dadosBanco, 'importacao_pronta.xlsx'));
-
   DOM.fileOrcamento.addEventListener('change', e => {
     if (!e.target.files.length) return;
     lerArquivo(e.target.files[0], linhas => {
       appState.dadosOrcamento = processarDadosOrcamento(linhas);
       mostrarTabela(appState.dadosOrcamento, 'previewOrcamento', 'Orçamento importado. Pronto para comparar.');
-      if (appState.dadosOrcamento.length > 0) {
-        showToast(`${appState.dadosOrcamento.length} itens importados.`, 'success');
-      }
+      if (appState.dadosOrcamento.length > 0) showToast(`${appState.dadosOrcamento.length} itens importados.`, 'success');
     });
   });
-  
-  DOM.fileBanco.addEventListener('change', e => {
-      if(!e.target.files.length) return;
-      lerArquivo(e.target.files[0], () => { showToast('Importação de arquivo do banco ainda não implementada.', 'info'); });
-  });
-
-  DOM.btnComparar.addEventListener('click', () => {
-    appState.possibleMatches = [];
-    comparar();
-  });
-  
+  DOM.fileBanco.addEventListener('change', e => { if(!e.target.files.length) return; lerArquivo(e.target.files[0], () => { showToast('Importação de arquivo do banco ainda não implementada.', 'info'); }); });
+  DOM.btnComparar.addEventListener('click', () => { appState.possibleMatches = []; comparar(); });
   DOM.btnExportarDiscrepBanco.addEventListener('click', () => exportarCSV(appState.discrepBanco, 'discrepancias_banco.csv'));
   DOM.btnExportarDiscrepOrcamento.addEventListener('click', () => exportarCSV(appState.discrepOrc, 'discrepancias_orcamento.csv'));
-  
   DOM.possibleMatchesTbl.addEventListener('click', handleMatchAction);
   DOM.tabelaBancoTbl.addEventListener('click', handleDiscrepancyDeletion);
   DOM.tabelaOrcamentoTbl.addEventListener('click', handleDiscrepancyDeletion);
-    
   DOM.btnAutoMatchHighConfidence.addEventListener('click', () => {
       const highConfidenceMatches = appState.possibleMatches.filter(m => m.score >= 0.8);
       if(!highConfidenceMatches.length) { showToast('Nenhuma sugestão de alta confiança para conciliar.', 'info'); return; }
@@ -620,7 +673,6 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast(`${highConfidenceMatches.length} itens conciliados automaticamente!`, 'success');
       comparar();
   });
-  
   DOM.btnIgnoreAllPossible.addEventListener('click', () => {
       if(!appState.possibleMatches.length) return;
       const count = appState.possibleMatches.length;
@@ -628,6 +680,36 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast(`${count} sugestões ignoradas. Serão tratadas como discrepâncias.`, 'info');
       comparar();
   });
+
+  // Listeners para Modal de Regras
+  DOM.btnGerenciarRegras.addEventListener('click', () => {
+    DOM.regrasModal.classList.remove('hidden');
+    const rules = getRules();
+    DOM.listaRegras.innerHTML = '';
+    if (rules.length > 0) {
+        DOM.regrasModalPlaceholder.classList.add('hidden');
+        rules.forEach(rule => {
+            const li = document.createElement('li');
+            li.innerHTML = `<span><strong>Banco:</strong> ${rule.banco} → <strong>Orçamento:</strong> ${rule.orc}</span> <button class="btn-delete-rule" data-banco="${rule.banco}" data-orc="${rule.orc}">Excluir</button>`;
+            DOM.listaRegras.appendChild(li);
+        });
+    } else {
+        DOM.regrasModalPlaceholder.classList.remove('hidden');
+    }
+  });
+  DOM.regrasModal.addEventListener('click', (e) => {
+    if (e.target.classList.contains('modal-overlay') || e.target.classList.contains('modal-close')) DOM.regrasModal.classList.add('hidden');
+    if (e.target.classList.contains('btn-delete-rule')) {
+        const { banco, orc } = e.target.dataset;
+        deleteRule(banco, orc);
+        e.target.parentElement.remove();
+        showToast('Regra excluída.', 'success');
+        if (getRules().length === 0) DOM.regrasModalPlaceholder.classList.remove('hidden');
+    }
+  });
+  DOM.btnExportarRegras.addEventListener('click', exportarRegras);
+  DOM.btnImportarRegras.addEventListener('click', () => DOM.importFile.click());
+  DOM.importFile.addEventListener('change', (e) => importarRegras(e.target.files[0]));
 
   // --- INICIALIZAÇÃO ---
   resetApplication();
