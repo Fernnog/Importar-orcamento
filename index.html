@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF--8">
+<meta charset="UTF-8">
 <title>Análise de Lançamentos para Orçamento</title>
 <link rel="icon" href="imagens/favicon.ico" sizes="any">
 <link rel="stylesheet" href="style.css">
@@ -15,10 +15,8 @@
     </div>
     <h1>Análise de Lançamentos para Orçamento</h1>
   </div>
-  <div>
-    <button id="btnGerenciarRegras" class="btn-header">⚙️ Gerenciar Regras</button>
-    <button id="btnNovaConciliacao" class="btn-header">✨ Nova Análise</button>
-  </div>
+  <button id="btnGerenciarRegras" class="btn-header">⚙️ Gerenciar Regras</button>
+  <button id="btnNovaConciliacao" class="btn-header">✨ Nova Análise</button>
 </header>
 
 <main>
@@ -105,32 +103,35 @@
   <p>Ferramenta local - Nenhum dado é enviado para servidores.</p>
 </footer>
 
+<!-- Modal de Regras -->
+<div id="regrasModal" class="modal-overlay hidden">
+  <div class="modal-content">
+    <button class="modal-close" title="Fechar">&times;</button>
+    <h2>Regras de Conciliação Salvas</h2>
+    <p>A ferramenta aplicará estas regras automaticamente. Exporte suas regras para criar um backup seguro.</p>
+    
+    <div id="infoVersaoRegras" class="info-versao hidden">
+      <span>🗓️ Versão das regras ativas:</span>
+      <strong id="timestampRegras"></strong>
+    </div>
+
+    <div class="modal-actions">
+      <button id="btnExportarRegras" class="btn-export">Exportar Regras</button>
+      <button id="btnImportarRegras">Importar Regras</button>
+      <input type="file" id="importFile" class="hidden" accept=".json">
+    </div>
+
+    <ul id="listaRegras"></ul>
+    <div id="regrasModalPlaceholder" class="no-results">Nenhuma regra salva.</div>
+  </div>
+</div>
+
 <!-- Container para as notificações (Toasts) -->
 <div id="toastContainer"></div>
 
 <!-- Spinner de Carregamento (Melhoria UX) -->
 <div id="spinnerOverlay" class="spinner-overlay hidden">
   <div class="spinner"></div>
-</div>
-
-<!-- Modal para Gerenciamento de Regras -->
-<div id="regrasModal" class="modal-overlay hidden">
-  <div class="modal-content">
-    <button class="modal-close" title="Fechar">&times;</button>
-    <h2>Regras de Conciliação Salvas</h2>
-    <p>A ferramenta aplicará estas regras automaticamente. Exporte suas regras para um arquivo de backup seguro.</p>
-    
-    <div class="modal-actions">
-        <button id="btnExportarRegras" class="btn-export">Exportar Regras</button>
-        <button id="btnImportarRegras">Importar Regras</button>
-        <input type="file" id="importFile" class="hidden" accept=".json">
-    </div>
-
-    <ul id="listaRegras">
-      <!-- As regras serão inseridas aqui pelo JavaScript -->
-    </ul>
-    <div id="regrasModalPlaceholder" class="no-results">Nenhuma regra salva.</div>
-  </div>
 </div>
 
 <script src="script.js" defer></script>
