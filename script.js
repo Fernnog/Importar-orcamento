@@ -300,12 +300,42 @@ function mostrarTabelaSugestoes(sugestoes) {
 }
 
 async function exportarXLSX(dados, nomeArquivo) {
-  // ... (função mantida como original) ...
+  if (!dados || !dados.length) {
+    showToast("A lista de transações para exportar está vazia.", 'error');
+    return;
+  }
+  
+  try {
+    await loadXLSXLibrary();
+    const dadosParaPlanilha = dados.map(linha => ({
+      'Data Ocorrência': linha.data, 'Descrição': linha.descricao, 'Valor': linha.valor
+    }));
+    const ws = XLSX.utils.json_to_sheet(dadosParaPlanilha);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Transacoes");
+    XLSX.writeFile(wb, nomeArquivo);
+    showToast('Planilha exportada com sucesso!', 'success');
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
 }
 
 function exportarCSV(dados, nomeArquivo) {
-  // ... (função mantida como original) ...
+  if (!dados || !dados.length) {
+    showToast("Não há discrepâncias para exportar.", 'error');
+    return;
+  }
+  const conteudo = 'Descrição,Valor\n' + dados.map(l => `"${l[0]}",${l[1]}`).join('\n');
+  const blob = new Blob([conteudo], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = nomeArquivo;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showToast(`Arquivo ${nomeArquivo} gerado!`, 'success');
 }
+
 
 // --- LÓGICA DE CONCILIAÇÃO ---
 function comparar() {
@@ -319,74 +349,70 @@ function comparar() {
     // Funções de normalização
     const normalizeDescricao = str => (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
     const normalizeValor = valor => (Math.round(parseFloat(valor) * 100) / 100).toFixed(2);
-
-    const buildCountMap = (dados, isOrcamento = false) => {
-      const map = new Map();
-      dados.forEach((item, index) => {
-        const key = `${normalizeDescricao(item[0])}|${normalizeValor(item[1])}`;
-        if (!map.has(key)) map.set(key, []);
-        const originalData = { item: item, originalIndex: index };
-        if(isOrcamento) originalData.used = false; // Flag para rastrear uso
-        map.get(key).push(originalData);
-      });
-      return map;
+    
+    // Constrói um mapa de contagem para respeitar multiplicidade
+    const buildCountMap = (dados) => {
+        const map = new Map();
+        dados.forEach(item => {
+            const key = `${normalizeDescricao(item[0])}|${normalizeValor(item[1])}`;
+            map.set(key, (map.get(key) || 0) + 1);
+        });
+        return map;
     };
 
-    let bancoParaConciliar = appState.dadosBanco.map(l => [l.descricao, l.valor]);
-    let orcamentoParaConciliar = [...appState.dadosOrcamento];
+    const bancoParaConciliar = appState.dadosBanco.map(l => [l.descricao, l.valor]);
+    const mapaOrcamento = buildCountMap(appState.dadosOrcamento);
     let reconciliadosCount = 0;
-
-    // --- PASSO 1: CONCILIAÇÃO EXATA COM CONTAGEM ---
-    const mapaOrcamento = buildCountMap(orcamentoParaConciliar, true);
-    let bancoRestante = [];
     
-    bancoParaConciliar.forEach((bancoItem) => {
-      const key = `${normalizeDescricao(bancoItem[0])}|${normalizeValor(bancoItem[1])}`;
-      const matchesNoOrcamento = mapaOrcamento.get(key);
-      if (matchesNoOrcamento && matchesNoOrcamento.length > 0) {
-        matchesNoOrcamento.shift(); // Remove a correspondência
-        reconciliadosCount++;
-      } else {
-        bancoRestante.push(bancoItem);
-      }
+    // --- PASSO 1: CONCILIAÇÃO EXATA ---
+    let bancoRestante = [];
+    bancoParaConciliar.forEach(bancoItem => {
+        const key = `${normalizeDescricao(bancoItem[0])}|${normalizeValor(bancoItem[1])}`;
+        if (mapaOrcamento.has(key) && mapaOrcamento.get(key) > 0) {
+            mapaOrcamento.set(key, mapaOrcamento.get(key) - 1);
+            reconciliadosCount++;
+        } else {
+            bancoRestante.push(bancoItem);
+        }
     });
 
     let orcamentoRestante = [];
-    mapaOrcamento.forEach(items => {
-      items.forEach(data => orcamentoRestante.push(data.item));
+    mapaOrcamento.forEach((count, key) => {
+        const [desc, val] = key.split('|');
+        for (let i = 0; i < count; i++) {
+            orcamentoRestante.push([desc, parseFloat(val)]);
+        }
     });
-    
-    // --- PASSO 2: CONCILIAÇÃO APROXIMADA (FUZZY) COM VALORES IGUAIS ---
+
+    // --- PASSO 2: CONCILIAÇÃO APROXIMADA (FUZZY) ---
     appState.sugestoes = [];
     if (bancoRestante.length > 0 && orcamentoRestante.length > 0) {
-      const fuse = new Fuse(orcamentoRestante, {
-          keys: ['0'], includeScore: true, threshold: 0.5,
-      });
+        const matchedOrcIndexes = new Set();
+        let bancoAindaRestante = [];
 
-      const matchedOrcIndexes = new Set();
-      let bancoAindaRestante = [];
+        bancoRestante.forEach(bancoItem => {
+            const orcComMesmoValor = orcamentoRestante.map((o,i) => ({item: o, index: i}))
+                .filter(obj => normalizeValor(obj.item[1]) === normalizeValor(bancoItem[1]) && !matchedOrcIndexes.has(obj.index));
 
-      bancoRestante.forEach(bancoItem => {
-          const orcComMesmoValor = orcamentoRestante.filter((o, i) => normalizeValor(o[1]) === normalizeValor(bancoItem[1]) && !matchedOrcIndexes.has(i));
-          if (orcComMesmoValor.length === 0) {
-              bancoAindaRestante.push(bancoItem);
-              return;
-          }
-          const fuseMesmoValor = new Fuse(orcComMesmoValor, { keys: ['0'], includeScore: true, threshold: 0.5 });
-          const results = fuseMesmoValor.search(bancoItem[0]);
+            if (orcComMesmoValor.length === 0) {
+                bancoAindaRestante.push(bancoItem);
+                return;
+            }
+            
+            const fuse = new Fuse(orcComMesmoValor, { keys: ['item.0'], includeScore: true, threshold: 0.5 });
+            const results = fuse.search(bancoItem[0]);
 
-          if (results.length > 0) {
-              const bestMatch = results[0];
-              const originalOrcIndex = orcamentoRestante.indexOf(bestMatch.item);
-              
-              appState.sugestoes.push({ bancoItem, orcItem: bestMatch.item, score: bestMatch.score });
-              matchedOrcIndexes.add(originalOrcIndex);
-          } else {
-              bancoAindaRestante.push(bancoItem);
-          }
-      });
-      bancoRestante = bancoAindaRestante;
-      orcamentoRestante = orcamentoRestante.filter((_, i) => !matchedOrcIndexes.has(i));
+            if (results.length > 0) {
+                const bestMatch = results[0];
+                appState.sugestoes.push({ bancoItem, orcItem: bestMatch.item.item, score: bestMatch.score });
+                matchedOrcIndexes.add(bestMatch.item.index);
+            } else {
+                bancoAindaRestante.push(bancoItem);
+            }
+        });
+
+        bancoRestante = bancoAindaRestante;
+        orcamentoRestante = orcamentoRestante.filter((_, i) => !matchedOrcIndexes.has(i));
     }
 
     // --- PASSO 3: FINALIZAR E ATUALIZAR ESTADO E UI ---
@@ -403,18 +429,80 @@ function comparar() {
     mostrarTabela(appState.discrepOrc, 'tabelaOrcamento', 'Nenhuma discrepância encontrada.');
     showToast('Comparação inteligente concluída!', 'success');
     hideSpinner();
-  }, 100); // setTimeout para permitir que o spinner renderize antes do processamento pesado
+  }, 100);
 }
 
 // --- EVENT LISTENERS (CENTRALIZADOS) ---
 document.addEventListener('DOMContentLoaded', () => {
   DOM.btnNovaConciliacao.addEventListener('click', resetApplication);
-  DOM.btnProcessarTexto.addEventListener('click', () => { /* ... (mantido original) ... */ });
-  DOM.btnRefinarDados.addEventListener('click', () => { /* ... (mantido original) ... */ });
-  DOM.btnExportarPlanilha.addEventListener('click', () => { exportarXLSX(appState.dadosBanco, 'importacao_pronta.xlsx'); });
-  DOM.fileOrcamento.addEventListener('change', e => { /* ... (mantido original) ... */ });
-  DOM.fileBanco.addEventListener('change', e => { /* ... (mantido original) ... */ });
+
+  DOM.btnProcessarTexto.addEventListener('click', () => {
+    const texto = DOM.textoBanco.value;
+    if (!texto.trim()) {
+      showToast("Cole o extrato bruto antes de processar.", 'error');
+      return;
+    }
+    appState.dadosBancoOriginais = importarTextoBrutoInteligente(texto);
+    appState.dadosBanco = [...appState.dadosBancoOriginais];
+    mostrarTabelaBanco(appState.dadosBanco, 'previewBanco');
+    
+    if (appState.dadosBanco.length > 0) {
+      DOM.painelRefinamento.classList.remove('hidden');
+      showToast(`Foram encontrados ${appState.dadosBanco.length} lançamentos.`, 'info');
+    } else {
+      showToast(`Nenhum lançamento válido encontrado. Verifique o formato do texto.`, 'error');
+    }
+  });
+
+  DOM.btnRefinarDados.addEventListener('click', () => {
+    const filtroDataInicio = DOM.filtroDataInicio.value;
+    const novaDataLancamentoStr = DOM.novaDataLancamento.value;
+
+    if (!filtroDataInicio) {
+      showToast('Selecione a data de início para filtrar.', 'error');
+      return;
+    }
+
+    const filtroDate = new Date(filtroDataInicio + 'T00:00:00');
+    let dadosFiltrados = appState.dadosBancoOriginais.filter(l => {
+        const [dia, mes, ano] = l.data.split('/');
+        return new Date(`${ano}-${mes}-${dia}T00:00:00`) >= filtroDate;
+    });
+
+    if (novaDataLancamentoStr) {
+        const [ano, mes, dia] = novaDataLancamentoStr.split('-');
+        dadosFiltrados = dadosFiltrados.map(l => ({ ...l, data: `${dia}/${mes}/${ano}` }));
+    }
+
+    appState.dadosBanco = dadosFiltrados;
+    mostrarTabelaBanco(appState.dadosBanco, 'previewBanco');
+    showToast('Filtro aplicado com sucesso!', 'success');
+  });
+
+  DOM.btnExportarPlanilha.addEventListener('click', () => {
+    exportarXLSX(appState.dadosBanco, 'importacao_pronta.xlsx');
+  });
+
+  DOM.fileOrcamento.addEventListener('change', e => {
+    if (!e.target.files.length) return;
+    lerArquivo(e.target.files[0], linhas => {
+      appState.dadosOrcamento = processarDadosOrcamento(linhas);
+      mostrarTabela(appState.dadosOrcamento, 'previewOrcamento', 'Orçamento importado. Pronto para comparar.');
+      if (appState.dadosOrcamento.length > 0) {
+        showToast(`Orçamento com ${appState.dadosOrcamento.length} itens importado.`, 'success');
+      }
+    });
+  });
+  
+  DOM.fileBanco.addEventListener('change', e => {
+      if(!e.target.files.length) return;
+      lerArquivo(e.target.files[0], linhas => {
+          showToast('Importação de arquivo do banco ainda não implementada.', 'info');
+      });
+  });
+
   DOM.btnComparar.addEventListener('click', comparar);
+  
   DOM.btnExportarDiscrepBanco.addEventListener('click', () => exportarCSV(appState.discrepBanco, 'discrepancias_banco.csv'));
   DOM.btnExportarDiscrepOrcamento.addEventListener('click', () => exportarCSV(appState.discrepOrc, 'discrepancias_orcamento.csv'));
 
@@ -425,7 +513,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const row = target.closest('tr');
     const sugestao = appState.sugestoes[sugestaoIdx];
-    if (!sugestao) return; // Já processado
+    if (!sugestao) return;
 
     if (target.classList.contains('btn-confirm')) {
       DOM.summaryReconciled.innerText = parseInt(DOM.summaryReconciled.innerText) + 1;
@@ -447,7 +535,7 @@ document.addEventListener('DOMContentLoaded', () => {
             DOM.sugestoesPanel.classList.add('hidden');
         }
     }, 300);
-    appState.sugestoes[sugestaoIdx] = null; // Marca como processado
+    appState.sugestoes[sugestaoIdx] = null;
   });
 
   resetApplication();
