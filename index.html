@@ -9,8 +9,12 @@
 <body>
 
 <header>
-  <img src="imagens/logo.png" alt="" class="header-logo" aria-hidden="true">
-  <h1>Conciliação Financeira</h1>
+  <div class="header-content">
+    <div class="logo-container">
+      <img src="imagens/logo.png" alt="" class="header-logo" aria-hidden="true">
+    </div>
+    <h1>Conciliação Financeira</h1>
+  </div>
   <button id="btnNovaConciliacao" class="btn-header">✨ Nova Conciliação</button>
 </header>
 
@@ -50,6 +54,24 @@
   <div class="action-center">
     <button id="btnComparar">Comparar</button>
   </div>
+
+  <section id="summaryPanel" class="summary-panel hidden">
+    <h2>Resumo da Conciliação</h2>
+    <div class="summary-metrics">
+      <div class="metric-item">
+        <span class="metric-value" id="summaryReconciled">0</span>
+        <span class="metric-label">✅ Itens Conciliados</span>
+      </div>
+      <div class="metric-item">
+        <span class="metric-value" id="summaryBank">0</span>
+        <span class="metric-label">⚠️ Discrepâncias no Banco</span>
+      </div>
+      <div class="metric-item">
+        <span class="metric-value" id="summaryBudget">0</span>
+        <span class="metric-label">⚠️ Discrepâncias no Orçamento</span>
+      </div>
+    </div>
+  </section>
 
   <section class="discrepancy-section">
     <h2>Discrepâncias - Banco</h2>

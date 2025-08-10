@@ -32,9 +32,14 @@ const DOM = {
   btnComparar: document.getElementById('btnComparar'),
   btnExportarDiscrepBanco: document.getElementById('btnExportarDiscrepBanco'),
   btnExportarDiscrepOrcamento: document.getElementById('btnExportarDiscrepOrcamento'),
+  
+  summaryPanel: document.getElementById('summaryPanel'),
+  summaryReconciled: document.getElementById('summaryReconciled'),
+  summaryBank: document.getElementById('summaryBank'),
+  summaryBudget: document.getElementById('summaryBudget'),
 };
 
-// --- SPINNER E NOTIFICAÇÕES (MELHORIA UX) ---
+// --- SPINNER, NOTIFICAÇÕES E ANIMAÇÕES (MELHORIA UX) ---
 const showSpinner = () => DOM.spinnerOverlay.classList.remove('hidden');
 const hideSpinner = () => DOM.spinnerOverlay.classList.add('hidden');
 
@@ -44,6 +49,23 @@ function showToast(message, type = 'info') {
   toast.innerText = message;
   DOM.toastContainer.appendChild(toast);
   setTimeout(() => toast.remove(), 5000);
+}
+
+function animateCounter(element, start, end, duration) {
+    let startTime = null;
+
+    const step = (currentTime) => {
+        if (!startTime) startTime = currentTime;
+        const progress = Math.min((currentTime - startTime) / duration, 1);
+        element.innerText = Math.floor(progress * (end - start) + start);
+        if (progress < 1) {
+            window.requestAnimationFrame(step);
+        } else {
+            element.innerText = end; // Garante o valor final exato
+        }
+    };
+
+    window.requestAnimationFrame(step);
 }
 
 // --- FUNÇÕES DE RESET ---
@@ -65,6 +87,7 @@ function resetApplication() {
   mostrarTabela([], 'tabelaOrcamento', 'Nenhuma discrepância encontrada.');
   
   DOM.painelRefinamento.classList.add('hidden');
+  DOM.summaryPanel.classList.add('hidden');
   showToast('Sessão limpa. Pronto para uma nova conciliação!', 'success');
 }
 
@@ -157,16 +180,13 @@ async function lerArquivo(file, callback) {
 }
 
 function importarTextoBrutoInteligente(texto) {
-  // Divide o texto em linhas, remove espaços extras e ignora linhas vazias. [2, 4]
   const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const anoCorrente = new Date().getFullYear();
   const dados = [];
-  const regexData = /^\d{2}\/\d{2}$/; // Regex para encontrar uma linha que contém APENAS uma data (ex: "16/12")
-  const regexValor = /^[\d.,]+$/;    // Regex para encontrar uma linha que contém APENAS um valor (ex: "49,00")
+  const regexData = /^\d{2}\/\d{2}$/;
+  const regexValor = /^[\d.,]+$/;
 
-  // Itera pelas linhas procurando por um padrão de transação. [2]
   for (let i = 0; i < linhas.length; i++) {
-    // Uma transação válida é um bloco de 3 linhas: Data, seguida por Descrição, seguida por Valor. [2]
     if (regexData.test(linhas[i]) && (i + 2 < linhas.length) && regexValor.test(linhas[i + 2])) {
       
       const dataStr = linhas[i];
@@ -176,7 +196,6 @@ function importarTextoBrutoInteligente(texto) {
       const dataCompleta = `${dataStr}/${anoCorrente}`;
       const valorNumerico = parseFloat(valorStr.replace(/\./g, '').replace(',', '.'));
 
-      // Em extratos de cartão, compras são valores "positivos". Para a conciliação, as tornamos negativas (saídas).
       const isCredito = /pagamento em|crédito/i.test(descricao);
       const valorFinal = isCredito ? valorNumerico : -valorNumerico;
 
@@ -185,8 +204,6 @@ function importarTextoBrutoInteligente(texto) {
         descricao: descricao.trim(),
         valor: valorFinal
       });
-
-      // Pula as próximas 2 linhas, pois já foram processadas como parte desta transação.
       i += 2;
     }
   }
@@ -312,6 +329,16 @@ function comparar() {
   
   appState.discrepBanco = bancoRest.filter(l => !chOrcPar.has(criarChaveParcial(l)));
   appState.discrepOrc = orcRest.filter(l => !chBancoPar.has(criarChaveParcial(l)));
+  
+  // Atualiza o painel de resumo e o exibe com animação
+  const reconciledCount = appState.dadosBanco.length - appState.discrepBanco.length;
+  const animationDuration = 750; // em ms
+  
+  animateCounter(DOM.summaryReconciled, 0, reconciledCount, animationDuration);
+  animateCounter(DOM.summaryBank, 0, appState.discrepBanco.length, animationDuration);
+  animateCounter(DOM.summaryBudget, 0, appState.discrepOrc.length, animationDuration);
+  
+  DOM.summaryPanel.classList.remove('hidden');
   
   mostrarTabela(appState.discrepBanco, 'tabelaBanco', 'Nenhuma discrepância encontrada.');
   mostrarTabela(appState.discrepOrc, 'tabelaOrcamento', 'Nenhuma discrepância encontrada.');
