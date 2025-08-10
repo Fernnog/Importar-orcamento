@@ -1,423 +1,634 @@
-/* --- 1. VARIABLES & BASE STYLES --- */
-:root {
-  --color-pink: #d81b60;
-  --color-blue: #1e88e5;
-  --color-green: #43a047;
-  --color-yellow: #fbc02d;
-  --color-red-error: #c0392b;
+// --- ESTADO CENTRALIZADO DA APLICAÇÃO ---
+const appState = {
+  dadosBanco: [],
+  dadosOrcamento: [],
+  dadosBancoOriginais: [],
+  discrepBanco: [],
+  discrepOrc: [],
+  possibleMatches: [],
+};
+
+// --- ELEMENTOS DO DOM (CACHE PARA PERFORMANCE) ---
+// Declarado aqui, mas populado apenas quando o DOM estiver pronto.
+const DOM = {};
+
+// --- FUNÇÕES DE LÓGICA DE SUGESTÃO ---
+function normalizeText(s = '') {
+  return String(s).toUpperCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function calculateRepetitions(data, keyExtractor) {
+    const counts = new Map();
+    data.forEach(item => {
+        const key = keyExtractor(item);
+        counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    return data.map(item => ({...item, count: counts.get(keyExtractor(item)) }));
+}
+
+function levenshteinDistance(a = '', b = '') {
+  if (a === b) return 1;
+  const la = a.length, lb = b.length;
+  if (la === 0 || lb === 0) return 0;
+  const matrix = Array.from({ length: la + 1 }, () => new Array(lb + 1).fill(0));
+  for (let i = 0; i <= la; i++) matrix[i][0] = i;
+  for (let j = 0; j <= lb; j++) matrix[0][j] = j;
+  for (let i = 1; i <= la; i++) {
+    for (let j = 1; j <= lb; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j - 1] + cost);
+    }
+  }
+  const dist = matrix[la][lb];
+  const maxLen = Math.max(la, lb);
+  return 1 - (dist / maxLen);
+}
+
+function encontrarPossiveisMatches(bancoRest, orcRest) {
+  const suggestions = new Map();
   
-  --color-text-dark: #34495e;
-  --color-text-light: #555;
-  --color-background-light: #f8f9fa;
-  --color-white: #fff;
-  --color-border: #e9ecef;
+  bancoRest.forEach((bancoItem) => {
+    orcRest.forEach((orcItem) => {
+      const valorBanco = Math.round(bancoItem.valor * 100);
+      const valorOrc = Math.round(orcItem.valor * 100);
+
+      if (valorBanco === valorOrc) {
+        const descBancoNorm = normalizeText(bancoItem.descricao);
+        const descOrcNorm = normalizeText(orcItem.descricao);
+        
+        if (descBancoNorm !== descOrcNorm) {
+          const score = levenshteinDistance(descBancoNorm, descOrcNorm);
+          if (score > 0.3) {
+             const key = bancoItem.descricao + bancoItem.valor;
+             if (!suggestions.has(key) || suggestions.get(key).score < score) {
+                suggestions.set(key, { bancoItem, orcItem, score });
+             }
+          }
+        }
+      }
+    });
+  });
   
-  --color-pink-dark: #c2185b;
-  --color-blue-dark: #1565c0;
-  --color-green-dark: #2e7d32;
+  const possible = Array.from(suggestions.values());
+  possible.sort((a, b) => b.score - a.score);
+  return possible;
 }
 
-body {
-  font-family: Arial, sans-serif;
-  margin: 0;
-  background-color: var(--color-background-light);
-  color: var(--color-text-dark);
+function renderPossibleMatches() {
+    const matches = appState.possibleMatches;
+    const tbl = DOM.possibleMatchesTbl;
+    tbl.innerHTML = `<thead><tr>
+        <th>Banco (Descrição)</th>
+        <th>Orçamento (Descrição)</th>
+        <th>Valor (R$)</th>
+        <th>Confiança</th>
+        <th>Ação</th>
+    </tr></thead>`;
+    const tbody = document.createElement('tbody');
+
+    if (!matches.length) {
+        DOM.possibleMatchesPanel.classList.add('hidden');
+        return;
+    }
+
+    DOM.possibleMatchesPanel.classList.remove('hidden');
+    matches.forEach((match, index) => {
+        const tr = tbody.insertRow();
+        tr.className = 'possible-match-row';
+        tr.dataset.matchIndex = index;
+        tr.draggable = true; 
+
+        tr.addEventListener('dragstart', handleDragStart);
+        tr.addEventListener('dragend', handleDragEnd);
+
+        const descBancoCell = tr.insertCell();
+        descBancoCell.innerText = match.bancoItem.descricao;
+        if (match.bancoItem.count > 1) {
+            descBancoCell.innerHTML += ` <span class="count-badge banco">${match.bancoItem.count}x</span>`;
+        }
+        
+        const descOrcCell = tr.insertCell();
+        descOrcCell.innerText = match.orcItem.descricao;
+         if (match.orcItem.count > 1) {
+            descOrcCell.innerHTML += ` <span class="count-badge orcamento">${match.orcItem.count}x</span>`;
+        }
+        
+        tr.insertCell().innerText = match.bancoItem.valor.toFixed(2);
+        
+        const scoreClass = match.score >= 0.8 ? 'high' : (match.score >= 0.5 ? 'medium' : 'low');
+        tr.insertCell().innerHTML = `<span class="match-score ${scoreClass}">${(match.score * 100).toFixed(0)}%</span>`;
+
+        const actionCell = tr.insertCell();
+        actionCell.className = 'possible-match-actions';
+        actionCell.innerHTML = `
+            <button class="btn-accept" title="Confirmar conciliação">✓</button>
+            <button class="btn-reject" title="Marcar como discrepância">✕</button>
+        `;
+    });
+    tbl.appendChild(tbody);
 }
 
-main {
-  padding: 20px;
-  max-width: 1200px;
-  margin: 0 auto;
+function handleMatchAction(e) {
+    const button = e.target.closest('button');
+    if (!button) return;
+
+    const tr = button.closest('tr');
+    if (!tr || typeof tr.dataset.matchIndex === 'undefined') return;
+    
+    const matchIndex = parseInt(tr.dataset.matchIndex, 10);
+    const match = appState.possibleMatches[matchIndex];
+
+    if (!match) return;
+
+    if (button.classList.contains('btn-accept')) {
+        appState.dadosBanco = appState.dadosBanco.filter(item => item !== match.bancoItem);
+        appState.dadosOrcamento = appState.dadosOrcamento.filter(item => item !== match.orcItem);
+        showToast('Conciliação confirmada!', 'success');
+    } else if (button.classList.contains('btn-reject')) {
+        showToast('Sugestão ignorada.', 'info');
+    }
+    
+    appState.possibleMatches.splice(matchIndex, 1);
+    comparar(); 
 }
 
-/* --- 2. LAYOUT & HEADER --- */
-header {
-  background: linear-gradient(120deg, var(--color-pink), var(--color-blue) 55%, var(--color-green), var(--color-yellow));
-  color: var(--color-white);
-  padding: 10px 20px;
-  text-align: center;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+
+// --- LÓGICA DE CONCILIAÇÃO ---
+const criarChaveItem = item => `${normalizeText(item.descricao)}_${(Math.round(item.valor*100)/100).toFixed(2)}`;
+const criarChaveParcialItem = item => `${normalizeText(item.descricao).substring(0,8)}_${(Math.round(item.valor*100)/100).toFixed(2)}`;
+
+function comparar() {
+  if (!appState.dadosBanco.length || !appState.dadosOrcamento.length) {
+    showToast("Importe os dados do banco e do orçamento antes de comparar.", 'error');
+    return;
+  }
+  
+  // PASSO 1: Conciliação exata
+  const chavesOrcamentoExatas = new Set(appState.dadosOrcamento.map(criarChaveItem));
+  const bancoConciliados = new Set();
+  const orcamentoConciliados = new Set();
+
+  appState.dadosBanco.forEach(bancoItem => {
+    const chave = criarChaveItem(bancoItem);
+    if (chavesOrcamentoExatas.has(chave)) {
+      chavesOrcamentoExatas.delete(chave);
+      bancoConciliados.add(bancoItem);
+    }
+  });
+
+  const chavesBancoConciliadas = new Set(Array.from(bancoConciliados).map(criarChaveItem));
+  appState.dadosOrcamento.forEach(orcItem => {
+      const chave = criarChaveItem(orcItem);
+      if(chavesBancoConciliadas.has(chave)){
+          chavesBancoConciliadas.delete(chave);
+          orcamentoConciliados.add(orcItem);
+      }
+  });
+
+  let bancoRestante = appState.dadosBanco.filter(item => !bancoConciliados.has(item));
+  let orcRestante = appState.dadosOrcamento.filter(item => !orcamentoConciliados.has(item));
+
+  // PASSO 2: Encontrar e APRESENTAR possíveis matches
+  if (!appState.possibleMatches.length) {
+      appState.possibleMatches = encontrarPossiveisMatches(bancoRestante, orcRestante);
+  }
+
+  if (appState.possibleMatches.length > 0) {
+      renderPossibleMatches();
+      showToast(`Encontramos ${appState.possibleMatches.length} possíveis conciliações para sua revisão.`, 'info');
+      
+      const reconciledCount = appState.dadosBancoOriginais.length - bancoRestante.length;
+      animateCounter(DOM.summaryReconciled, 0, reconciledCount, 750);
+      animateCounter(DOM.summaryBank, 0, 0, 750);
+      animateCounter(DOM.summaryBudget, 0, 0, 750);
+      DOM.summaryPanel.classList.remove('hidden');
+
+      mostrarTabela([], 'tabelaBanco', 'Revise as possíveis coincidências acima.');
+      mostrarTabela([], 'tabelaOrcamento', 'Revise as possíveis coincidências acima.');
+      return; 
+  }
+  
+  // PASSO 3: Se não há sugestões, calcula as DISCREPÂNCIAS finais
+  DOM.possibleMatchesPanel.classList.add('hidden');
+  const chavesOrcamentoParciais = new Set(orcRestante.map(criarChaveParcialItem));
+  const chavesBancoParciais = new Set(bancoRestante.map(criarChaveParcialItem));
+
+  appState.discrepBanco = bancoRestante
+      .filter(item => !chavesOrcamentoParciais.has(criarChaveParcialItem(item)));
+  
+  appState.discrepOrc = orcRestante
+      .filter(item => !chavesBancoParciais.has(criarChaveParcialItem(item)));
+
+  // PASSO 4: Atualiza o resumo e as tabelas de discrepâncias
+  const reconciledCountFinal = appState.dadosBancoOriginais.length - appState.discrepBanco.length;
+  animateCounter(DOM.summaryReconciled, 0, reconciledCountFinal, 750);
+  animateCounter(DOM.summaryBank, 0, appState.discrepBanco.length, 750);
+  animateCounter(DOM.summaryBudget, 0, appState.discrepOrc.length, 750);
+  DOM.summaryPanel.classList.remove('hidden');
+
+  mostrarTabela(appState.discrepBanco, 'tabelaBanco', 'Nenhuma discrepância encontrada.');
+  mostrarTabela(appState.discrepOrc, 'tabelaOrcamento', 'Nenhuma discrepância encontrada.');
+  showToast('Comparação concluída!', 'success');
 }
 
-.header-content {
-  display: flex;
-  align-items: center;
-  gap: 15px;
+
+// --- SPINNER, NOTIFICAÇÕES E ANIMAÇÕES (MELHORIA UX) ---
+const showSpinner = () => DOM.spinnerOverlay.classList.remove('hidden');
+const hideSpinner = () => DOM.spinnerOverlay.classList.add('hidden');
+
+function showToast(message, type = 'info') {
+  DOM.toastContainer.insertAdjacentHTML('beforeend', `<div class="toast ${type}">${message}</div>`);
+  const toast = DOM.toastContainer.lastElementChild;
+  setTimeout(() => toast.remove(), 5000);
 }
 
-.logo-container {
-  width: 50px;
-  height: 50px;
-  background-color: rgba(255, 255, 255, 0.95);
-  border-radius: 50%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.25);
-  flex-shrink: 0;
-  transition: transform 0.2s ease-in-out;
+function animateCounter(element, start, end, duration) {
+    let startTime = null;
+    const step = (currentTime) => {
+        if (!startTime) startTime = currentTime;
+        const progress = Math.min((currentTime - startTime) / duration, 1);
+        element.innerText = Math.floor(progress * (end - start) + start);
+        if (progress < 1) {
+            window.requestAnimationFrame(step);
+        } else {
+            element.innerText = end;
+        }
+    };
+    window.requestAnimationFrame(step);
 }
 
-.logo-container:hover {
-  transform: scale(1.1);
+// --- FUNÇÕES DE RESET ---
+function resetApplication() {
+  Object.assign(appState, {
+    dadosBanco: [], dadosOrcamento: [], dadosBancoOriginais: [],
+    discrepBanco: [], discrepOrc: [], possibleMatches: []
+  });
+  DOM.textoBanco.value = '';
+  DOM.fileBanco.value = '';
+  DOM.fileOrcamento.value = '';
+  DOM.filtroDataInicio.value = '';
+  DOM.novaDataLancamento.value = '';
+  mostrarTabelaBanco([], 'previewBanco');
+  mostrarTabela([], 'previewOrcamento', 'Nenhum orçamento importado.');
+  mostrarTabela([], 'tabelaBanco', 'Nenhuma discrepância encontrada.');
+  mostrarTabela([], 'tabelaOrcamento', 'Nenhuma discrepância encontrada.');
+  DOM.painelRefinamento.classList.add('hidden');
+  DOM.summaryPanel.classList.add('hidden');
+  DOM.possibleMatchesPanel.classList.add('hidden');
+  showToast('Sessão limpa. Pronto para uma nova análise!', 'success');
 }
 
-.header-logo {
-  height: 35px;
-  width: auto;
+// --- FUNÇÕES DE PROCESSAMENTO DE DADOS ---
+let xlsxLibraryLoaded = false;
+function loadXLSXLibrary() {
+  if (xlsxLibraryLoaded) return Promise.resolve();
+  if (typeof XLSX !== 'undefined') { xlsxLibraryLoaded = true; return Promise.resolve(); }
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js';
+    script.onload = () => { xlsxLibraryLoaded = true; resolve(); };
+    script.onerror = () => reject(new Error("Falha ao carregar a biblioteca de planilhas."));
+    document.head.appendChild(script);
+  });
 }
 
-h1 {
-  margin: 0;
-  font-size: 24px;
-  text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+async function lerArquivo(file, callback) {
+  showSpinner();
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (['xlsx', 'xls'].includes(ext)) {
+    try { await loadXLSXLibrary(); } catch (error) {
+      showToast(error.message, 'error'); hideSpinner(); return;
+    }
+  }
+  if (!['csv', 'xlsx', 'xls'].includes(ext)) {
+    showToast('Formato de arquivo não suportado: ' + ext, 'error'); hideSpinner(); return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      let linhas;
+      if (ext === 'csv') {
+        linhas = new TextDecoder('utf-8').decode(e.target.result).split(/\r?\n/).map(l => l.split(';'));
+      } else {
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        linhas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+      }
+      callback(linhas);
+    } catch (error) {
+      console.error("Erro ao processar arquivo:", error); showToast("Ocorreu um erro ao processar o arquivo.", 'error');
+    } finally { hideSpinner(); }
+  };
+  reader.onerror = () => { showToast("Não foi possível ler o arquivo.", 'error'); hideSpinner(); };
+  reader.readAsArrayBuffer(file);
 }
 
-.container {
-  display: flex;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 20px;
+function importarTextoBrutoInteligente(texto) {
+  const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const anoCorrente = new Date().getFullYear(); const dados = [];
+  const regexData = /^\d{2}\/\d{2}$/; const regexValor = /^[\d.,]+$/;
+  for (let i = 0; i < linhas.length; i++) {
+    if (regexData.test(linhas[i]) && (i + 2 < linhas.length) && regexValor.test(linhas[i + 2])) {
+      const dataCompleta = `${linhas[i]}/${anoCorrente}`;
+      const valorNumerico = parseFloat(linhas[i + 2].replace(/\./g, '').replace(',', '.'));
+      const isCredito = /pagamento em|crédito/i.test(linhas[i + 1]);
+      dados.push({ data: dataCompleta, descricao: linhas[i + 1].trim(), valor: isCredito ? valorNumerico : -valorNumerico });
+      i += 2;
+    }
+  }
+  const keyExtractor = item => `${normalizeText(item.descricao)}_${item.valor.toFixed(2)}`;
+  return calculateRepetitions(dados, keyExtractor);
 }
 
-footer {
-  text-align: center;
-  padding: 12px;
-  font-size: 13px;
-  background-color: var(--color-border);
-  color: var(--color-text-light);
+function processarDadosOrcamento(linhas) {
+  if (!linhas || linhas.length < 2) { showToast('Arquivo de orçamento vazio.', 'error'); return []; }
+  const cabecalho = linhas[0].map(h => String(h).toLowerCase().trim());
+  const idxDescricao = cabecalho.indexOf('descrição');
+  const idxValor = cabecalho.indexOf('valor');
+  if (idxDescricao === -1 || idxValor === -1) { showToast("Arquivo deve ter colunas 'Descrição' e 'Valor'.", 'error'); return []; }
+  
+  const dadosProcessados = linhas.slice(1).map(linha => {
+    const descricao = linha[idxDescricao] ? String(linha[idxDescricao]).trim() : '';
+    const valor = parseFloat(String(linha[idxValor] || '0').replace(',', '.'));
+    return (descricao && !isNaN(valor)) ? { descricao, valor } : null;
+  }).filter(Boolean);
+  
+  const keyExtractor = item => `${normalizeText(item.descricao)}_${item.valor.toFixed(2)}`;
+  return calculateRepetitions(dadosProcessados, keyExtractor);
 }
 
-/* --- 3. COMPONENTS --- */
-
-/* Panels & Sections */
-.panel {
-  flex: 1;
-  min-width: 400px;
-  background: var(--color-white);
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  border: 1px solid var(--color-border);
+// --- RENDERIZAÇÃO E EXPORTAÇÃO ---
+function mostrarTabelaBanco(dados, id) {
+  const tbl = document.getElementById(id);
+  tbl.innerHTML = '<thead><tr><th>Data</th><th>Descrição</th><th>Valor (R$)</th></tr></thead>';
+  const tbody = document.createElement('tbody');
+  if (!dados || !dados.length) {
+    tbody.innerHTML = `<tr><td colspan="3" class="no-results">${DOM.textoBanco.value.trim() ? 'Nenhum lançamento válido.' : 'Aguardando dados...'}</td></tr>`;
+  } else {
+    dados.forEach(l => {
+      const row = tbody.insertRow();
+      row.insertCell().innerText = l.data; 
+      const descCell = row.insertCell();
+      descCell.innerText = l.descricao;
+      if (l.count > 1) {
+          descCell.innerHTML += ` <span class="count-badge banco">${l.count}x</span>`;
+      }
+      row.insertCell().innerText = l.valor.toFixed(2);
+    });
+  }
+  tbl.appendChild(tbody);
 }
 
-h2 {
-  margin-top: 0;
-  border-bottom: 2px solid var(--color-border);
-  padding-bottom: 10px;
-  color: var(--color-text-dark);
+function mostrarTabela(dados, id, noResultsMessage = 'Nenhum dado encontrado.') {
+  const tbl = document.getElementById(id);
+  const isDiscrepancyTable = id.startsWith('tabela');
+  const header = isDiscrepancyTable
+      ? '<thead><tr><th>Descrição</th><th>Valor (R$)</th><th class="col-action" title="Excluir">X</th></tr></thead>'
+      : '<thead><tr><th>Descrição</th><th>Valor (R$)</th></tr></thead>';
+  tbl.innerHTML = header;
+
+  const tbody = document.createElement('tbody');
+  if (!dados || !dados.length) {
+    const colspan = isDiscrepancyTable ? 3 : 2;
+    tbody.innerHTML = `<tr><td colspan="${colspan}" class="no-results">${noResultsMessage}</td></tr>`;
+  } else {
+    dados.forEach(l => {
+      const row = tbody.insertRow();
+      const descCell = row.insertCell();
+      descCell.innerText = l.descricao;
+      if (l.count > 1) {
+        const badgeType = id.includes('Banco') || id.includes('banco') ? 'banco' : 'orcamento';
+        descCell.innerHTML += ` <span class="count-badge ${badgeType}">${l.count}x</span>`;
+      }
+      
+      row.insertCell().innerText = l.valor.toFixed(2);
+
+      if (isDiscrepancyTable) {
+        const actionCell = row.insertCell();
+        actionCell.className = 'col-action';
+        const key = criarChaveItem(l);
+        actionCell.innerHTML = `<input type="checkbox" data-key="${key}" title="Excluir este item de toda a análise">`;
+      }
+    });
+  }
+  tbl.appendChild(tbody);
 }
 
-.panel h2.panel-title {
-  display: inline-block;
-  padding: 5px 12px;
-  border-radius: 15px;
-  color: var(--color-white);
-  font-size: 18px;
-  margin-bottom: 15px;
-  border-bottom: none;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+async function exportarXLSX(dados, nomeArquivo) {
+  if (!dados || !dados.length) { showToast("Lista para exportar está vazia.", 'error'); return; }
+  try {
+    await loadXLSXLibrary();
+    const ws = XLSX.utils.json_to_sheet(dados.map(l => ({ 'Data': l.data, 'Descrição': l.descricao, 'Valor': l.valor })));
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Transacoes");
+    XLSX.writeFile(wb, nomeArquivo); showToast('Planilha exportada!', 'success');
+  } catch (error) { showToast(error.message, 'error'); }
 }
 
-.panel h2.panel-title--banco {
-  background-color: var(--color-blue-dark);
+function exportarCSV(dados, nomeArquivo) {
+  if (!dados || !dados.length) { showToast("Não há discrepâncias para exportar.", 'error'); return; }
+  const conteudo = 'Descrição,Valor\n' + dados.map(l => `"${l.descricao}",${l.valor}`).join('\n');
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([conteudo], { type: 'text/csv;charset=utf-8;' }));
+  link.download = nomeArquivo; document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  showToast(`Arquivo ${nomeArquivo} gerado!`, 'success');
 }
 
-.panel h2.panel-title--orcamento {
-  background-color: var(--color-green-dark);
+// --- FUNÇÕES DE DRAG-AND-DROP ---
+function handleDragStart(e) {
+    e.target.classList.add('dragging');
+    e.dataTransfer.setData('text/plain', e.target.dataset.matchIndex);
+    e.dataTransfer.effectAllowed = 'move';
 }
 
-.discrepancy-section {
-    background: var(--color-white);
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    margin-top: 20px;
+function handleDragEnd(e) {
+    e.target.classList.remove('dragging');
 }
 
-/* Summary Panel */
-.summary-panel {
-  background: var(--color-white);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+function handleDragOver(e) {
+    e.preventDefault(); 
+    if (e.target.closest('.metric-item')) {
+        e.target.closest('.metric-item').classList.add('drop-target-hover');
+    }
 }
 
-.summary-metrics {
-  display: flex;
-  justify-content: space-around;
-  text-align: center;
-  flex-wrap: wrap;
-  gap: 15px;
+function handleDragLeave(e) {
+    if (e.target.closest('.metric-item')) {
+        e.target.closest('.metric-item').classList.remove('drop-target-hover');
+    }
 }
 
-.metric-item .metric-value {
-  display: block;
-  font-size: 28px;
-  font-weight: bold;
-  color: var(--color-text-dark);
+function handleDrop(e) {
+    e.preventDefault();
+    const dropZone = e.target.closest('.metric-item');
+    if (!dropZone) return;
+
+    dropZone.classList.remove('drop-target-hover');
+    const matchIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+    const match = appState.possibleMatches[matchIndex];
+
+    if (!match) return;
+
+    const targetType = dropZone.dataset.dropTarget;
+
+    if (targetType === 'reconciled') {
+        appState.dadosBanco = appState.dadosBanco.filter(item => item !== match.bancoItem);
+        appState.dadosOrcamento = appState.dadosOrcamento.filter(item => item !== match.orcItem);
+        showToast('Conciliação confirmada via Arrastar e Soltar!', 'success');
+    } else {
+        showToast('Sugestão marcada como discrepância.', 'info');
+    }
+
+    appState.possibleMatches.splice(matchIndex, 1);
+    comparar();
 }
 
-.metric-item .metric-label {
-  font-size: 14px;
-  color: var(--color-text-light);
+function handleDiscrepancyDeletion(e) {
+    if (e.target.tagName !== 'INPUT' || e.target.type !== 'checkbox') return;
+
+    const keyToDelete = e.target.dataset.key;
+    if (!confirm(`Tem certeza que deseja apagar TODOS os lançamentos com a chave "${keyToDelete.replace('_', ' | R$ ')}"? Esta ação é irreversível e removerá o item de todas as listas.`)) {
+        e.target.checked = false;
+        return;
+    }
+    
+    showSpinner();
+    
+    appState.dadosBanco = appState.dadosBanco.filter(item => criarChaveItem(item) !== keyToDelete);
+    appState.dadosBancoOriginais = appState.dadosBancoOriginais.filter(item => criarChaveItem(item) !== keyToDelete);
+    appState.dadosOrcamento = appState.dadosOrcamento.filter(item => criarChaveItem(item) !== keyToDelete);
+    
+    showToast('Item removido. Reanalisando...', 'info');
+    
+    appState.possibleMatches = [];
+    comparar();
+
+    // Atualiza as previews também
+    mostrarTabelaBanco(appState.dadosBanco, 'previewBanco');
+    mostrarTabela(appState.dadosOrcamento, 'previewOrcamento', 'Orçamento importado. Pronto para comparar.');
+
+    hideSpinner();
 }
 
-/* Transforma os itens do resumo em cards */
-.summary-panel .metric-item {
-  flex-basis: 30%; /* Garante que os cards tenham espaço */
-  min-width: 250px;
-  padding: 20px;
-  border: 2px dashed transparent;
-  border-radius: 8px;
-  background-color: var(--color-background-light);
-  transition: all 0.2s ease-in-out;
-}
+// --- EVENT LISTENERS (CENTRALIZADOS) ---
+document.addEventListener('DOMContentLoaded', () => {
+  Object.assign(DOM, {
+    toastContainer: document.getElementById('toastContainer'),
+    spinnerOverlay: document.getElementById('spinnerOverlay'),
+    textoBanco: document.getElementById('textoBanco'),
+    fileBanco: document.getElementById('fileBanco'),
+    filtroDataInicio: document.getElementById('filtroDataInicio'),
+    novaDataLancamento: document.getElementById('novaDataLancamento'),
+    painelRefinamento: document.getElementById('painelRefinamento'),
+    fileOrcamento: document.getElementById('fileOrcamento'),
+    previewBancoTbl: document.getElementById('previewBanco'),
+    previewOrcamentoTbl: document.getElementById('previewOrcamento'),
+    tabelaBancoTbl: document.getElementById('tabelaBanco'),
+    tabelaOrcamentoTbl: document.getElementById('tabelaOrcamento'),
+    btnNovaConciliacao: document.getElementById('btnNovaConciliacao'),
+    btnProcessarTexto: document.getElementById('btnProcessarTexto'),
+    btnRefinarDados: document.getElementById('btnRefinarDados'),
+    btnExportarPlanilha: document.getElementById('btnExportarPlanilha'),
+    btnComparar: document.getElementById('btnComparar'),
+    btnExportarDiscrepBanco: document.getElementById('btnExportarDiscrepBanco'),
+    btnExportarDiscrepOrcamento: document.getElementById('btnExportarDiscrepOrcamento'),
+    summaryPanel: document.getElementById('summaryPanel'),
+    summaryReconciled: document.getElementById('summaryReconciled'),
+    summaryBank: document.getElementById('summaryBank'),
+    summaryBudget: document.getElementById('summaryBudget'),
+    possibleMatchesPanel: document.getElementById('possibleMatchesPanel'),
+    possibleMatchesTbl: document.getElementById('possibleMatchesTbl'),
+    btnAutoMatchHighConfidence: document.getElementById('btnAutoMatchHighConfidence'),
+    btnIgnoreAllPossible: document.getElementById('btnIgnoreAllPossible'),
+  });
 
-/* Feedback visual quando o mouse com um item arrastado passa por cima */
-.summary-panel .metric-item.drop-target-hover {
-  border-color: var(--color-blue);
-  transform: translateY(-5px);
-  box-shadow: 0 4px 15px rgba(30, 136, 229, 0.2);
-}
+  const dropTargets = document.querySelectorAll('.summary-panel .metric-item');
+  dropTargets.forEach(target => {
+      target.addEventListener('dragover', handleDragOver);
+      target.addEventListener('dragleave', handleDragLeave);
+      target.addEventListener('drop', handleDrop);
+  });
 
-/* Estilo para a linha da tabela que está sendo arrastada */
-.possible-match-row.dragging {
-  opacity: 0.5;
-  background: #e0e0e0;
-}
+  DOM.btnNovaConciliacao.addEventListener('click', resetApplication);
 
-/* Refinement Panel */
-.refinement-panel {
-  background-color: var(--color-background-light);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: 15px;
-  margin-top: 15px;
-  margin-bottom: 15px;
-}
-.refinement-panel .input-group {
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.refinement-panel label {
-  font-weight: bold;
-}
-.refinement-panel input {
-  padding: 8px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-}
+  DOM.btnProcessarTexto.addEventListener('click', () => {
+    const texto = DOM.textoBanco.value;
+    if (!texto.trim()) { showToast("Cole o extrato bruto antes de processar.", 'error'); return; }
+    appState.dadosBancoOriginais = importarTextoBrutoInteligente(texto);
+    appState.dadosBanco = [...appState.dadosBancoOriginais];
+    mostrarTabelaBanco(appState.dadosBanco, 'previewBanco');
+    if (appState.dadosBanco.length > 0) {
+      DOM.painelRefinamento.classList.remove('hidden');
+      showToast(`${appState.dadosBanco.length} lançamentos encontrados.`, 'info');
+    } else {
+      showToast(`Nenhum lançamento válido encontrado. Verifique o formato.`, 'error');
+    }
+  });
 
-/* Buttons */
-button {
-  background-color: var(--color-blue);
-  border: none;
-  color: var(--color-white);
-  padding: 10px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-top: 10px;
-  font-size: 15px;
-  transition: background-color 0.2s;
-  box-sizing: border-box;
-}
-button:hover {
-  background-color: var(--color-blue-dark);
-}
-button:disabled {
-  background-color: #bdc3c7;
-  cursor: not-allowed;
-}
+  DOM.btnRefinarDados.addEventListener('click', () => {
+    if (!DOM.filtroDataInicio.value) { showToast('Selecione a data de início para filtrar.', 'error'); return; }
+    const filtroDate = new Date(DOM.filtroDataInicio.value + 'T00:00:00');
+    let dadosFiltrados = appState.dadosBancoOriginais.filter(l => {
+        const [dia, mes, ano] = l.data.split('/');
+        return new Date(`${ano}-${mes}-${dia}T00:00:00`) >= filtroDate;
+    });
+    if (DOM.novaDataLancamento.value) {
+        const [ano, mes, dia] = DOM.novaDataLancamento.value.split('-');
+        dadosFiltrados = dadosFiltrados.map(l => ({ ...l, data: `${dia}/${mes}/${ano}` }));
+    }
+    appState.dadosBanco = dadosFiltrados;
+    mostrarTabelaBanco(appState.dadosBanco, 'previewBanco');
+    showToast('Filtro aplicado com sucesso!', 'success');
+  });
 
-.btn-header {
-  background-color: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  margin: 0;
-}
-.btn-header:hover {
-  background-color: rgba(255, 255, 255, 0.3);
-}
+  DOM.btnExportarPlanilha.addEventListener('click', () => exportarXLSX(appState.dadosBanco, 'importacao_pronta.xlsx'));
 
-.btn-export {
-  background-color: var(--color-green);
-}
-.btn-export:hover {
-  background-color: var(--color-green-dark);
-}
+  DOM.fileOrcamento.addEventListener('change', e => {
+    if (!e.target.files.length) return;
+    lerArquivo(e.target.files[0], linhas => {
+      appState.dadosOrcamento = processarDadosOrcamento(linhas);
+      mostrarTabela(appState.dadosOrcamento, 'previewOrcamento', 'Orçamento importado. Pronto para comparar.');
+      if (appState.dadosOrcamento.length > 0) {
+        showToast(`${appState.dadosOrcamento.length} itens importados.`, 'success');
+      }
+    });
+  });
+  
+  DOM.fileBanco.addEventListener('change', e => {
+      if(!e.target.files.length) return;
+      lerArquivo(e.target.files[0], () => { showToast('Importação de arquivo do banco ainda não implementada.', 'info'); });
+  });
 
-.action-center {
-  text-align: center;
-  margin: 25px 0;
-}
-.action-center button {
-    width: auto;
-    padding: 12px 30px;
-    font-size: 16px;
-    font-weight: bold;
-    background-color: var(--color-pink);
-}
-.action-center button:hover {
-    background-color: var(--color-pink-dark);
-}
+  DOM.btnComparar.addEventListener('click', () => {
+    appState.possibleMatches = [];
+    comparar();
+  });
+  
+  DOM.btnExportarDiscrepBanco.addEventListener('click', () => exportarCSV(appState.discrepBanco, 'discrepancias_banco.csv'));
+  DOM.btnExportarDiscrepOrcamento.addEventListener('click', () => exportarCSV(appState.discrepOrc, 'discrepancias_orcamento.csv'));
+  
+  DOM.possibleMatchesTbl.addEventListener('click', handleMatchAction);
+  DOM.tabelaBancoTbl.addEventListener('click', handleDiscrepancyDeletion);
+  DOM.tabelaOrcamentoTbl.addEventListener('click', handleDiscrepancyDeletion);
+    
+  DOM.btnAutoMatchHighConfidence.addEventListener('click', () => {
+      const highConfidenceMatches = appState.possibleMatches.filter(m => m.score >= 0.8);
+      if(!highConfidenceMatches.length) { showToast('Nenhuma sugestão de alta confiança para conciliar.', 'info'); return; }
+      highConfidenceMatches.forEach(match => {
+          appState.dadosBanco = appState.dadosBanco.filter(item => item !== match.bancoItem);
+          appState.dadosOrcamento = appState.dadosOrcamento.filter(item => item !== match.orcItem);
+      });
+      appState.possibleMatches = appState.possibleMatches.filter(m => m.score < 0.8);
+      showToast(`${highConfidenceMatches.length} itens conciliados automaticamente!`, 'success');
+      comparar();
+  });
+  
+  DOM.btnIgnoreAllPossible.addEventListener('click', () => {
+      if(!appState.possibleMatches.length) return;
+      const count = appState.possibleMatches.length;
+      appState.possibleMatches = []; 
+      showToast(`${count} sugestões ignoradas. Serão tratadas como discrepâncias.`, 'info');
+      comparar();
+  });
 
-.discrepancy-section button {
-    width: auto;
-    font-size: 14px;
-    float: right;
-    margin-top: -5px;
-}
-
-#btnRefinarDados {
-  background-color: var(--color-pink);
-  width: 100%;
-}
-#btnRefinarDados:hover {
-  background-color: var(--color-pink-dark);
-}
-
-/* Tables, Forms & Misc */
-textarea {
-  box-sizing: border-box;
-  width: 100%;
-  height: 150px;
-  margin-top: 8px;
-  padding: 10px;
-  font-family: monospace;
-  font-size: 14px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  resize: vertical;
-}
-
-table {
-  border-collapse: collapse;
-  width: 100%;
-  margin-top: 15px;
-  font-size: 14px;
-}
-th, td {
-  border: 1px solid #ddd;
-  padding: 8px;
-  text-align: left;
-}
-th {
-  background-color: var(--color-background-light);
-}
-
-.discrepancy-section table th.col-action,
-.discrepancy-section table td.col-action {
-    width: 40px;
-    text-align: center;
-}
-
-.no-results {
-  text-align: center;
-  padding: 20px 10px;
-  color: #777;
-  font-style: italic;
-  background-color: #fcfcfc;
-}
-
-/* --- 4. UX ENHANCEMENTS (TOAST, SPINNER) --- */
-#toastContainer {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  z-index: 1000;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.toast {
-  padding: 15px 20px;
-  border-radius: 5px;
-  color: var(--color-white);
-  font-size: 15px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-  opacity: 0;
-  transform: translateX(100%);
-  animation: slideIn 0.5s forwards, fadeOut 0.5s 4.5s forwards;
-}
-.toast.info { background-color: var(--color-blue); }
-.toast.success { background-color: var(--color-green); }
-.toast.error { background-color: var(--color-red-error); }
-@keyframes slideIn {
-  to { opacity: 1; transform: translateX(0); }
-}
-@keyframes fadeOut {
-  to { opacity: 0; transform: translateX(100%); }
-}
-
-.spinner-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(255, 255, 255, 0.8);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 2000;
-  transition: opacity 0.3s;
-}
-.spinner {
-  border: 8px solid #f3f3f3;
-  border-top: 8px solid var(--color-blue);
-  border-radius: 50%;
-  width: 60px;
-  height: 60px;
-  animation: spin 1s linear infinite;
-}
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* --- 5. UTILITY CLASSES --- */
-.hidden {
-  display: none !important;
-}
-
-/* --- 6. ESTILOS PARA SUGESTÕES DE MATCH --- */
-.match-score {
-  display: inline-block;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 12px;
-  color: var(--color-white);
-  text-align: center;
-  min-width: 45px;
-}
-.match-score.high { background: var(--color-green); }
-.match-score.medium { background: var(--color-yellow); color: #222; }
-.match-score.low { background: var(--color-red-error); }
-
-.count-badge {
-  display: inline-block;
-  padding: 2px 7px;
-  border-radius: 10px;
-  font-weight: 600;
-  font-size: 11px;
-  color: var(--color-white);
-  margin-left: 8px;
-  vertical-align: middle;
-}
-.count-badge.banco { background: var(--color-blue); }
-.count-badge.orcamento { background: var(--color-green); }
-
-.possible-match-actions button { margin-right: 6px; padding: 5px 10px; font-size: 14px; }
-.possible-match-row td { vertical-align: middle; }
-#btnAutoMatchHighConfidence { background-color: var(--color-green); }
-#btnAutoMatchHighConfidence:hover { background-color: var(--color-green-dark); }
-#btnIgnoreAllPossible { background-color: var(--color-red-error); border-color: rgba(255,255,255,0.7); }
-#btnIgnoreAllPossible:hover { background-color: #a82c21; }
+  // --- INICIALIZAÇÃO ---
+  resetApplication();
+});
