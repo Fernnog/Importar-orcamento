@@ -17,6 +17,15 @@ function normalizeText(s = '') {
   return String(s).toUpperCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
 }
 
+function calculateRepetitions(data, keyExtractor) {
+    const counts = new Map();
+    data.forEach(item => {
+        const key = keyExtractor(item);
+        counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    return data.map(item => ({...item, count: counts.get(keyExtractor(item)) }));
+}
+
 function levenshteinDistance(a = '', b = '') {
   if (a === b) return 1;
   const la = a.length, lb = b.length;
@@ -41,11 +50,11 @@ function encontrarPossiveisMatches(bancoRest, orcRest) {
   bancoRest.forEach((bancoItem) => {
     orcRest.forEach((orcItem) => {
       const valorBanco = Math.round(bancoItem.valor * 100);
-      const valorOrc = Math.round(orcItem[1] * 100);
+      const valorOrc = Math.round(orcItem.valor * 100);
 
       if (valorBanco === valorOrc) {
         const descBancoNorm = normalizeText(bancoItem.descricao);
-        const descOrcNorm = normalizeText(orcItem[0]);
+        const descOrcNorm = normalizeText(orcItem.descricao);
         
         if (descBancoNorm !== descOrcNorm) {
           const score = levenshteinDistance(descBancoNorm, descOrcNorm);
@@ -92,8 +101,18 @@ function renderPossibleMatches() {
         tr.addEventListener('dragstart', handleDragStart);
         tr.addEventListener('dragend', handleDragEnd);
 
-        tr.insertCell().innerText = match.bancoItem.descricao;
-        tr.insertCell().innerText = match.orcItem[0];
+        const descBancoCell = tr.insertCell();
+        descBancoCell.innerText = match.bancoItem.descricao;
+        if (match.bancoItem.count > 1) {
+            descBancoCell.innerHTML += ` <span class="count-badge banco">${match.bancoItem.count}x</span>`;
+        }
+        
+        const descOrcCell = tr.insertCell();
+        descOrcCell.innerText = match.orcItem.descricao;
+         if (match.orcItem.count > 1) {
+            descOrcCell.innerHTML += ` <span class="count-badge orcamento">${match.orcItem.count}x</span>`;
+        }
+        
         tr.insertCell().innerText = match.bancoItem.valor.toFixed(2);
         
         const scoreClass = match.score >= 0.8 ? 'high' : (match.score >= 0.5 ? 'medium' : 'low');
@@ -135,8 +154,8 @@ function handleMatchAction(e) {
 
 
 // --- LÓGICA DE CONCILIAÇÃO ---
-const criarChaveExata = linha => `${String(linha[0]).toUpperCase().replace(/\s+/g,' ').trim()}_${(Math.round(linha[1]*100)/100).toFixed(2)}`;
-const criarChaveParcial = linha => `${String(linha[0]).toUpperCase().replace(/\s+/g,' ').trim().substring(0,8)}_${(Math.round(linha[1]*100)/100).toFixed(2)}`;
+const criarChaveItem = item => `${normalizeText(item.descricao)}_${(Math.round(item.valor*100)/100).toFixed(2)}`;
+const criarChaveParcialItem = item => `${normalizeText(item.descricao).substring(0,8)}_${(Math.round(item.valor*100)/100).toFixed(2)}`;
 
 function comparar() {
   if (!appState.dadosBanco.length || !appState.dadosOrcamento.length) {
@@ -145,22 +164,21 @@ function comparar() {
   }
   
   // PASSO 1: Conciliação exata
-  const chavesOrcamentoExatas = new Set(appState.dadosOrcamento.map(criarChaveExata));
+  const chavesOrcamentoExatas = new Set(appState.dadosOrcamento.map(criarChaveItem));
   const bancoConciliados = new Set();
   const orcamentoConciliados = new Set();
 
   appState.dadosBanco.forEach(bancoItem => {
-    const chave = criarChaveExata([bancoItem.descricao, bancoItem.valor]);
-    // Usa um Set para garantir que cada transação do orçamento só seja usada uma vez
+    const chave = criarChaveItem(bancoItem);
     if (chavesOrcamentoExatas.has(chave)) {
       chavesOrcamentoExatas.delete(chave);
       bancoConciliados.add(bancoItem);
     }
   });
 
-  const chavesBancoConciliadas = new Set(Array.from(bancoConciliados).map(item => criarChaveExata([item.descricao, item.valor])));
+  const chavesBancoConciliadas = new Set(Array.from(bancoConciliados).map(criarChaveItem));
   appState.dadosOrcamento.forEach(orcItem => {
-      const chave = criarChaveExata(orcItem);
+      const chave = criarChaveItem(orcItem);
       if(chavesBancoConciliadas.has(chave)){
           chavesBancoConciliadas.delete(chave);
           orcamentoConciliados.add(orcItem);
@@ -190,17 +208,16 @@ function comparar() {
       return; 
   }
   
-  // PASSO 3: Se não há sugestões, calcula as DISCREPÂNCIAS finais (com match parcial)
+  // PASSO 3: Se não há sugestões, calcula as DISCREPÂNCIAS finais
   DOM.possibleMatchesPanel.classList.add('hidden');
-  const chavesOrcamentoParciais = new Set(orcRestante.map(criarChaveParcial));
-  const chavesBancoParciais = new Set(bancoRestante.map(item => criarChaveParcial([item.descricao, item.valor])));
+  const chavesOrcamentoParciais = new Set(orcRestante.map(criarChaveParcialItem));
+  const chavesBancoParciais = new Set(bancoRestante.map(criarChaveParcialItem));
 
   appState.discrepBanco = bancoRestante
-      .filter(item => !chavesOrcamentoParciais.has(criarChaveParcial([item.descricao, item.valor])))
-      .map(item => [item.descricao, item.valor]);
+      .filter(item => !chavesOrcamentoParciais.has(criarChaveParcialItem(item)));
   
   appState.discrepOrc = orcRestante
-      .filter(item => !chavesBancoParciais.has(criarChaveParcial(item)));
+      .filter(item => !chavesBancoParciais.has(criarChaveParcialItem(item)));
 
   // PASSO 4: Atualiza o resumo e as tabelas de discrepâncias
   const reconciledCountFinal = appState.dadosBancoOriginais.length - appState.discrepBanco.length;
@@ -258,7 +275,7 @@ function resetApplication() {
   DOM.painelRefinamento.classList.add('hidden');
   DOM.summaryPanel.classList.add('hidden');
   DOM.possibleMatchesPanel.classList.add('hidden');
-  showToast('Sessão limpa. Pronto para uma nova conciliação!', 'success');
+  showToast('Sessão limpa. Pronto para uma nova análise!', 'success');
 }
 
 // --- FUNÇÕES DE PROCESSAMENTO DE DADOS ---
@@ -318,7 +335,8 @@ function importarTextoBrutoInteligente(texto) {
       i += 2;
     }
   }
-  return dados;
+  const keyExtractor = item => `${normalizeText(item.descricao)}_${item.valor.toFixed(2)}`;
+  return calculateRepetitions(dados, keyExtractor);
 }
 
 function processarDadosOrcamento(linhas) {
@@ -327,11 +345,15 @@ function processarDadosOrcamento(linhas) {
   const idxDescricao = cabecalho.indexOf('descrição');
   const idxValor = cabecalho.indexOf('valor');
   if (idxDescricao === -1 || idxValor === -1) { showToast("Arquivo deve ter colunas 'Descrição' e 'Valor'.", 'error'); return []; }
-  return linhas.slice(1).map(linha => {
+  
+  const dadosProcessados = linhas.slice(1).map(linha => {
     const descricao = linha[idxDescricao] ? String(linha[idxDescricao]).trim() : '';
     const valor = parseFloat(String(linha[idxValor] || '0').replace(',', '.'));
-    return (descricao && !isNaN(valor)) ? [descricao, valor] : null;
+    return (descricao && !isNaN(valor)) ? { descricao, valor } : null;
   }).filter(Boolean);
+  
+  const keyExtractor = item => `${normalizeText(item.descricao)}_${item.valor.toFixed(2)}`;
+  return calculateRepetitions(dadosProcessados, keyExtractor);
 }
 
 // --- RENDERIZAÇÃO E EXPORTAÇÃO ---
@@ -344,7 +366,12 @@ function mostrarTabelaBanco(dados, id) {
   } else {
     dados.forEach(l => {
       const row = tbody.insertRow();
-      row.insertCell().innerText = l.data; row.insertCell().innerText = l.descricao;
+      row.insertCell().innerText = l.data; 
+      const descCell = row.insertCell();
+      descCell.innerText = l.descricao;
+      if (l.count > 1) {
+          descCell.innerHTML += ` <span class="count-badge banco">${l.count}x</span>`;
+      }
       row.insertCell().innerText = l.valor.toFixed(2);
     });
   }
@@ -353,14 +380,34 @@ function mostrarTabelaBanco(dados, id) {
 
 function mostrarTabela(dados, id, noResultsMessage = 'Nenhum dado encontrado.') {
   const tbl = document.getElementById(id);
-  tbl.innerHTML = '<thead><tr><th>Descrição</th><th>Valor (R$)</th></tr></thead>';
+  const isDiscrepancyTable = id.startsWith('tabela');
+  const header = isDiscrepancyTable
+      ? '<thead><tr><th>Descrição</th><th>Valor (R$)</th><th class="col-action" title="Excluir">X</th></tr></thead>'
+      : '<thead><tr><th>Descrição</th><th>Valor (R$)</th></tr></thead>';
+  tbl.innerHTML = header;
+
   const tbody = document.createElement('tbody');
   if (!dados || !dados.length) {
-    tbody.innerHTML = `<tr><td colspan="2" class="no-results">${noResultsMessage}</td></tr>`;
+    const colspan = isDiscrepancyTable ? 3 : 2;
+    tbody.innerHTML = `<tr><td colspan="${colspan}" class="no-results">${noResultsMessage}</td></tr>`;
   } else {
     dados.forEach(l => {
       const row = tbody.insertRow();
-      row.insertCell().innerText = l[0]; row.insertCell().innerText = l[1].toFixed(2);
+      const descCell = row.insertCell();
+      descCell.innerText = l.descricao;
+      if (l.count > 1) {
+        const badgeType = id.includes('Banco') || id.includes('banco') ? 'banco' : 'orcamento';
+        descCell.innerHTML += ` <span class="count-badge ${badgeType}">${l.count}x</span>`;
+      }
+      
+      row.insertCell().innerText = l.valor.toFixed(2);
+
+      if (isDiscrepancyTable) {
+        const actionCell = row.insertCell();
+        actionCell.className = 'col-action';
+        const key = criarChaveItem(l);
+        actionCell.innerHTML = `<input type="checkbox" data-key="${key}" title="Excluir este item de toda a análise">`;
+      }
     });
   }
   tbl.appendChild(tbody);
@@ -378,7 +425,7 @@ async function exportarXLSX(dados, nomeArquivo) {
 
 function exportarCSV(dados, nomeArquivo) {
   if (!dados || !dados.length) { showToast("Não há discrepâncias para exportar.", 'error'); return; }
-  const conteudo = 'Descrição,Valor\n' + dados.map(l => `"${l[0]}",${l[1]}`).join('\n');
+  const conteudo = 'Descrição,Valor\n' + dados.map(l => `"${l.descricao}",${l.valor}`).join('\n');
   const link = document.createElement("a");
   link.href = URL.createObjectURL(new Blob([conteudo], { type: 'text/csv;charset=utf-8;' }));
   link.download = nomeArquivo; document.body.appendChild(link); link.click(); document.body.removeChild(link);
@@ -432,6 +479,33 @@ function handleDrop(e) {
 
     appState.possibleMatches.splice(matchIndex, 1);
     comparar();
+}
+
+function handleDiscrepancyDeletion(e) {
+    if (e.target.tagName !== 'INPUT' || e.target.type !== 'checkbox') return;
+
+    const keyToDelete = e.target.dataset.key;
+    if (!confirm(`Tem certeza que deseja apagar TODOS os lançamentos com a chave "${keyToDelete.replace('_', ' | R$ ')}"? Esta ação é irreversível e removerá o item de todas as listas.`)) {
+        e.target.checked = false;
+        return;
+    }
+    
+    showSpinner();
+    
+    appState.dadosBanco = appState.dadosBanco.filter(item => criarChaveItem(item) !== keyToDelete);
+    appState.dadosBancoOriginais = appState.dadosBancoOriginais.filter(item => criarChaveItem(item) !== keyToDelete);
+    appState.dadosOrcamento = appState.dadosOrcamento.filter(item => criarChaveItem(item) !== keyToDelete);
+    
+    showToast('Item removido. Reanalisando...', 'info');
+    
+    appState.possibleMatches = [];
+    comparar();
+
+    // Atualiza as previews também
+    mostrarTabelaBanco(appState.dadosBanco, 'previewBanco');
+    mostrarTabela(appState.dadosOrcamento, 'previewOrcamento', 'Orçamento importado. Pronto para comparar.');
+
+    hideSpinner();
 }
 
 // --- EVENT LISTENERS (CENTRALIZADOS) ---
@@ -532,6 +606,8 @@ document.addEventListener('DOMContentLoaded', () => {
   DOM.btnExportarDiscrepOrcamento.addEventListener('click', () => exportarCSV(appState.discrepOrc, 'discrepancias_orcamento.csv'));
   
   DOM.possibleMatchesTbl.addEventListener('click', handleMatchAction);
+  DOM.tabelaBancoTbl.addEventListener('click', handleDiscrepancyDeletion);
+  DOM.tabelaOrcamentoTbl.addEventListener('click', handleDiscrepancyDeletion);
     
   DOM.btnAutoMatchHighConfidence.addEventListener('click', () => {
       const highConfidenceMatches = appState.possibleMatches.filter(m => m.score >= 0.8);
