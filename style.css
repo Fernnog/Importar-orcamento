@@ -110,6 +110,25 @@ h2 {
   color: var(--color-text-dark);
 }
 
+.panel h2.panel-title {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: 15px;
+  color: var(--color-white);
+  font-size: 18px;
+  margin-bottom: 15px;
+  border-bottom: none;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.panel h2.panel-title--banco {
+  background-color: var(--color-blue-dark);
+}
+
+.panel h2.panel-title--orcamento {
+  background-color: var(--color-green-dark);
+}
+
 .discrepancy-section {
     background: var(--color-white);
     padding: 20px;
@@ -293,6 +312,12 @@ th {
   background-color: var(--color-background-light);
 }
 
+.discrepancy-section table th.col-action,
+.discrepancy-section table td.col-action {
+    width: 40px;
+    text-align: center;
+}
+
 .no-results {
   text-align: center;
   padding: 20px 10px;
@@ -376,6 +401,19 @@ th {
 .match-score.high { background: var(--color-green); }
 .match-score.medium { background: var(--color-yellow); color: #222; }
 .match-score.low { background: var(--color-red-error); }
+
+.count-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--color-white);
+  margin-left: 8px;
+  vertical-align: middle;
+}
+.count-badge.banco { background: var(--color-blue); }
+.count-badge.orcamento { background: var(--color-green); }
 
 .possible-match-actions button { margin-right: 6px; padding: 5px 10px; font-size: 14px; }
 .possible-match-row td { vertical-align: middle; }
