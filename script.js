@@ -87,6 +87,10 @@ function renderPossibleMatches() {
         const tr = tbody.insertRow();
         tr.className = 'possible-match-row';
         tr.dataset.matchIndex = index;
+        tr.draggable = true; 
+
+        tr.addEventListener('dragstart', handleDragStart);
+        tr.addEventListener('dragend', handleDragEnd);
 
         tr.insertCell().innerText = match.bancoItem.descricao;
         tr.insertCell().innerText = match.orcItem[0];
@@ -381,10 +385,57 @@ function exportarCSV(dados, nomeArquivo) {
   showToast(`Arquivo ${nomeArquivo} gerado!`, 'success');
 }
 
+// --- FUNÇÕES DE DRAG-AND-DROP ---
+function handleDragStart(e) {
+    e.target.classList.add('dragging');
+    e.dataTransfer.setData('text/plain', e.target.dataset.matchIndex);
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleDragEnd(e) {
+    e.target.classList.remove('dragging');
+}
+
+function handleDragOver(e) {
+    e.preventDefault(); 
+    if (e.target.closest('.metric-item')) {
+        e.target.closest('.metric-item').classList.add('drop-target-hover');
+    }
+}
+
+function handleDragLeave(e) {
+    if (e.target.closest('.metric-item')) {
+        e.target.closest('.metric-item').classList.remove('drop-target-hover');
+    }
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    const dropZone = e.target.closest('.metric-item');
+    if (!dropZone) return;
+
+    dropZone.classList.remove('drop-target-hover');
+    const matchIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+    const match = appState.possibleMatches[matchIndex];
+
+    if (!match) return;
+
+    const targetType = dropZone.dataset.dropTarget;
+
+    if (targetType === 'reconciled') {
+        appState.dadosBanco = appState.dadosBanco.filter(item => item !== match.bancoItem);
+        appState.dadosOrcamento = appState.dadosOrcamento.filter(item => item !== match.orcItem);
+        showToast('Conciliação confirmada via Arrastar e Soltar!', 'success');
+    } else {
+        showToast('Sugestão marcada como discrepância.', 'info');
+    }
+
+    appState.possibleMatches.splice(matchIndex, 1);
+    comparar();
+}
 
 // --- EVENT LISTENERS (CENTRALIZADOS) ---
 document.addEventListener('DOMContentLoaded', () => {
-  // *** CORREÇÃO: Cache dos elementos do DOM é feito aqui, quando tudo está carregado. ***
   Object.assign(DOM, {
     toastContainer: document.getElementById('toastContainer'),
     spinnerOverlay: document.getElementById('spinnerOverlay'),
@@ -413,6 +464,13 @@ document.addEventListener('DOMContentLoaded', () => {
     possibleMatchesTbl: document.getElementById('possibleMatchesTbl'),
     btnAutoMatchHighConfidence: document.getElementById('btnAutoMatchHighConfidence'),
     btnIgnoreAllPossible: document.getElementById('btnIgnoreAllPossible'),
+  });
+
+  const dropTargets = document.querySelectorAll('.summary-panel .metric-item');
+  dropTargets.forEach(target => {
+      target.addEventListener('dragover', handleDragOver);
+      target.addEventListener('dragleave', handleDragLeave);
+      target.addEventListener('drop', handleDrop);
   });
 
   DOM.btnNovaConciliacao.addEventListener('click', resetApplication);

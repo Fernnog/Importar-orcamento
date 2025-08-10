@@ -58,19 +58,31 @@
   <section id="summaryPanel" class="summary-panel hidden">
     <h2>Resumo da Conciliação</h2>
     <div class="summary-metrics">
-      <div class="metric-item">
+      <div class="metric-item" data-drop-target="reconciled">
         <span class="metric-value" id="summaryReconciled">0</span>
         <span class="metric-label">✅ Itens Conciliados</span>
       </div>
-      <div class="metric-item">
+      <div class="metric-item" data-drop-target="bank-discrepancy">
         <span class="metric-value" id="summaryBank">0</span>
         <span class="metric-label">⚠️ Discrepâncias no Banco</span>
       </div>
-      <div class="metric-item">
+      <div class="metric-item" data-drop-target="budget-discrepancy">
         <span class="metric-value" id="summaryBudget">0</span>
         <span class="metric-label">⚠️ Discrepâncias no Orçamento</span>
       </div>
     </div>
+  </section>
+  
+  <section id="possibleMatchesPanel" class="discrepancy-section hidden" aria-live="polite" aria-atomic="true">
+    <h2>Possíveis Coincidências (Arraste para uma das caixas acima)</h2>
+
+    <div class="refinement-panel" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <button id="btnAutoMatchHighConfidence" class="btn-export" title="Concilia automaticamente sugestões com confiança acima de 80%">✓ Conciliar Sugestões de Alta Confiança</button>
+      <button id="btnIgnoreAllPossible" class="btn-header">✕ Ignorar Todas</button>
+      <span style="margin-left:auto; font-size:13px; color:var(--color-text-light)">Revise os pares e confirme a ação.</span>
+    </div>
+
+    <table id="possibleMatchesTbl" aria-label="Tabela de possíveis coincidências para conciliação manual"></table>
   </section>
 
   <section class="discrepancy-section">
@@ -83,19 +95,6 @@
     <h2>Discrepâncias - Orçamento</h2>
     <button id="btnExportarDiscrepOrcamento" class="btn-export">Exportar CSV</button>
     <table id="tabelaOrcamento"></table>
-  </section>
-
-  <!-- PAINEL DE SUGESTÕES ADICIONADO AQUI -->
-  <section id="possibleMatchesPanel" class="discrepancy-section hidden" aria-live="polite" aria-atomic="true">
-    <h2>Possíveis Coincidências (mesmo valor, descrições diferentes)</h2>
-
-    <div class="refinement-panel" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-      <button id="btnAutoMatchHighConfidence" class="btn-export">✓ Conciliar Sugestões de Alta Confiança</button>
-      <button id="btnIgnoreAllPossible" class="btn-header">✕ Ignorar Todas</button>
-      <span style="margin-left:auto; font-size:13px; color:var(--color-text-light)">Revise os pares e confirme a ação.</span>
-    </div>
-
-    <table id="possibleMatchesTbl" aria-label="Tabela de possíveis coincidências para conciliação manual"></table>
   </section>
 </main>
 

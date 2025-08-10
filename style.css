@@ -148,6 +148,30 @@ h2 {
   color: var(--color-text-light);
 }
 
+/* Transforma os itens do resumo em cards */
+.summary-panel .metric-item {
+  flex-basis: 30%; /* Garante que os cards tenham espaço */
+  min-width: 250px;
+  padding: 20px;
+  border: 2px dashed transparent;
+  border-radius: 8px;
+  background-color: var(--color-background-light);
+  transition: all 0.2s ease-in-out;
+}
+
+/* Feedback visual quando o mouse com um item arrastado passa por cima */
+.summary-panel .metric-item.drop-target-hover {
+  border-color: var(--color-blue);
+  transform: translateY(-5px);
+  box-shadow: 0 4px 15px rgba(30, 136, 229, 0.2);
+}
+
+/* Estilo para a linha da tabela que está sendo arrastada */
+.possible-match-row.dragging {
+  opacity: 0.5;
+  background: #e0e0e0;
+}
+
 /* Refinement Panel */
 .refinement-panel {
   background-color: var(--color-background-light);
