@@ -337,3 +337,25 @@ th {
 .hidden {
   display: none !important;
 }
+
+/* --- 6. ESTILOS PARA SUGESTÕES DE MATCH --- */
+.match-score {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--color-white);
+  text-align: center;
+  min-width: 45px;
+}
+.match-score.high { background: var(--color-green); }
+.match-score.medium { background: var(--color-yellow); color: #222; }
+.match-score.low { background: var(--color-red-error); }
+
+.possible-match-actions button { margin-right: 6px; padding: 5px 10px; font-size: 14px; }
+.possible-match-row td { vertical-align: middle; }
+#btnAutoMatchHighConfidence { background-color: var(--color-green); }
+#btnAutoMatchHighConfidence:hover { background-color: var(--color-green-dark); }
+#btnIgnoreAllPossible { background-color: var(--color-red-error); border-color: rgba(255,255,255,0.7); }
+#btnIgnoreAllPossible:hover { background-color: #a82c21; }

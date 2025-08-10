@@ -131,7 +131,6 @@ function handleMatchAction(e) {
 
 
 // --- LÓGICA DE CONCILIAÇÃO ---
-
 const criarChaveExata = linha => `${String(linha[0]).toUpperCase().replace(/\s+/g,' ').trim()}_${(Math.round(linha[1]*100)/100).toFixed(2)}`;
 const criarChaveParcial = linha => `${String(linha[0]).toUpperCase().replace(/\s+/g,' ').trim().substring(0,8)}_${(Math.round(linha[1]*100)/100).toFixed(2)}`;
 
@@ -144,26 +143,31 @@ function comparar() {
   // PASSO 1: Conciliação exata
   const chavesOrcamentoExatas = new Set(appState.dadosOrcamento.map(criarChaveExata));
   const bancoConciliados = new Set();
-  
+  const orcamentoConciliados = new Set();
+
   appState.dadosBanco.forEach(bancoItem => {
-      const chave = criarChaveExata([bancoItem.descricao, bancoItem.valor]);
-      if (chavesOrcamentoExatas.has(chave)) {
-          // Para evitar conciliar a mesma transação do orçamento várias vezes, removemos a chave
-          chavesOrcamentoExatas.delete(chave);
-          bancoConciliados.add(bancoItem);
-      }
+    const chave = criarChaveExata([bancoItem.descricao, bancoItem.valor]);
+    // Usa um Set para garantir que cada transação do orçamento só seja usada uma vez
+    if (chavesOrcamentoExatas.has(chave)) {
+      chavesOrcamentoExatas.delete(chave);
+      bancoConciliados.add(bancoItem);
+    }
   });
 
-  const orcamentoConciliados = new Set(Array.from(bancoConciliados).map(item => {
-      const chave = criarChaveExata([item.descricao, item.valor]);
-      return appState.dadosOrcamento.find(o => criarChaveExata(o) === chave);
-  }));
+  const chavesBancoConciliadas = new Set(Array.from(bancoConciliados).map(item => criarChaveExata([item.descricao, item.valor])));
+  appState.dadosOrcamento.forEach(orcItem => {
+      const chave = criarChaveExata(orcItem);
+      if(chavesBancoConciliadas.has(chave)){
+          chavesBancoConciliadas.delete(chave);
+          orcamentoConciliados.add(orcItem);
+      }
+  });
 
   let bancoRestante = appState.dadosBanco.filter(item => !bancoConciliados.has(item));
   let orcRestante = appState.dadosOrcamento.filter(item => !orcamentoConciliados.has(item));
 
   // PASSO 2: Encontrar e APRESENTAR possíveis matches
-  if (!appState.possibleMatches || appState.possibleMatches.length === 0) {
+  if (!appState.possibleMatches.length) {
       appState.possibleMatches = encontrarPossiveisMatches(bancoRestante, orcRestante);
   }
 
@@ -184,7 +188,6 @@ function comparar() {
   
   // PASSO 3: Se não há sugestões, calcula as DISCREPÂNCIAS finais (com match parcial)
   DOM.possibleMatchesPanel.classList.add('hidden');
-
   const chavesOrcamentoParciais = new Set(orcRestante.map(criarChaveParcial));
   const chavesBancoParciais = new Set(bancoRestante.map(item => criarChaveParcial([item.descricao, item.valor])));
 
@@ -213,16 +216,13 @@ const showSpinner = () => DOM.spinnerOverlay.classList.remove('hidden');
 const hideSpinner = () => DOM.spinnerOverlay.classList.add('hidden');
 
 function showToast(message, type = 'info') {
-  const toast = document.createElement('div');
-  toast.className = `toast ${type}`;
-  toast.innerText = message;
-  DOM.toastContainer.appendChild(toast);
+  DOM.toastContainer.insertAdjacentHTML('beforeend', `<div class="toast ${type}">${message}</div>`);
+  const toast = DOM.toastContainer.lastElementChild;
   setTimeout(() => toast.remove(), 5000);
 }
 
 function animateCounter(element, start, end, duration) {
     let startTime = null;
-
     const step = (currentTime) => {
         if (!startTime) startTime = currentTime;
         const progress = Math.min((currentTime - startTime) / duration, 1);
@@ -230,10 +230,9 @@ function animateCounter(element, start, end, duration) {
         if (progress < 1) {
             window.requestAnimationFrame(step);
         } else {
-            element.innerText = end; // Garante o valor final exato
+            element.innerText = end;
         }
     };
-
     window.requestAnimationFrame(step);
 }
 
@@ -243,18 +242,15 @@ function resetApplication() {
     dadosBanco: [], dadosOrcamento: [], dadosBancoOriginais: [],
     discrepBanco: [], discrepOrc: [], possibleMatches: []
   });
-
   DOM.textoBanco.value = '';
   DOM.fileBanco.value = '';
   DOM.fileOrcamento.value = '';
   DOM.filtroDataInicio.value = '';
   DOM.novaDataLancamento.value = '';
-  
   mostrarTabelaBanco([], 'previewBanco');
   mostrarTabela([], 'previewOrcamento', 'Nenhum orçamento importado.');
   mostrarTabela([], 'tabelaBanco', 'Nenhuma discrepância encontrada.');
   mostrarTabela([], 'tabelaOrcamento', 'Nenhuma discrepância encontrada.');
-  
   DOM.painelRefinamento.classList.add('hidden');
   DOM.summaryPanel.classList.add('hidden');
   DOM.possibleMatchesPanel.classList.add('hidden');
@@ -265,10 +261,7 @@ function resetApplication() {
 let xlsxLibraryLoaded = false;
 function loadXLSXLibrary() {
   if (xlsxLibraryLoaded) return Promise.resolve();
-  if (typeof XLSX !== 'undefined') {
-    xlsxLibraryLoaded = true;
-    return Promise.resolve();
-  }
+  if (typeof XLSX !== 'undefined') { xlsxLibraryLoaded = true; return Promise.resolve(); }
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js';
@@ -294,7 +287,7 @@ async function lerArquivo(file, callback) {
     try {
       let linhas;
       if (ext === 'csv') {
-        linhas = new TextDecoder('utf-8').decode(e.target.result).split(/\r?\n/).map(l => l.split(','));
+        linhas = new TextDecoder('utf-8').decode(e.target.result).split(/\r?\n/).map(l => l.split(';'));
       } else {
         const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
         linhas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });

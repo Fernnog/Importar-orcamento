@@ -84,6 +84,19 @@
     <button id="btnExportarDiscrepOrcamento" class="btn-export">Exportar CSV</button>
     <table id="tabelaOrcamento"></table>
   </section>
+
+  <!-- PAINEL DE SUGESTÕES ADICIONADO AQUI -->
+  <section id="possibleMatchesPanel" class="discrepancy-section hidden" aria-live="polite" aria-atomic="true">
+    <h2>Possíveis Coincidências (mesmo valor, descrições diferentes)</h2>
+
+    <div class="refinement-panel" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <button id="btnAutoMatchHighConfidence" class="btn-export">✓ Conciliar Sugestões de Alta Confiança</button>
+      <button id="btnIgnoreAllPossible" class="btn-header">✕ Ignorar Todas</button>
+      <span style="margin-left:auto; font-size:13px; color:var(--color-text-light)">Revise os pares e confirme a ação.</span>
+    </div>
+
+    <table id="possibleMatchesTbl" aria-label="Tabela de possíveis coincidências para conciliação manual"></table>
+  </section>
 </main>
 
 <footer>
