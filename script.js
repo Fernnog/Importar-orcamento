@@ -5,6 +5,7 @@ const appState = {
   dadosBancoOriginais: [],
   discrepBanco: [],
   discrepOrc: [],
+  possibleMatches: [],
 };
 
 // --- ELEMENTOS DO DOM (CACHE PARA PERFORMANCE) ---
@@ -37,6 +38,11 @@ const DOM = {
   summaryReconciled: document.getElementById('summaryReconciled'),
   summaryBank: document.getElementById('summaryBank'),
   summaryBudget: document.getElementById('summaryBudget'),
+  
+  possibleMatchesPanel: document.getElementById('possibleMatchesPanel'),
+  possibleMatchesTbl: document.getElementById('possibleMatchesTbl'),
+  btnAutoMatchHighConfidence: document.getElementById('btnAutoMatchHighConfidence'),
+  btnIgnoreAllPossible: document.getElementById('btnIgnoreAllPossible'),
 };
 
 // --- SPINNER, NOTIFICAÇÕES E ANIMAÇÕES (MELHORIA UX) ---
@@ -72,7 +78,7 @@ function animateCounter(element, start, end, duration) {
 function resetApplication() {
   Object.assign(appState, {
     dadosBanco: [], dadosOrcamento: [], dadosBancoOriginais: [],
-    discrepBanco: [], discrepOrc: []
+    discrepBanco: [], discrepOrc: [], possibleMatches: []
   });
 
   DOM.textoBanco.value = '';
@@ -88,6 +94,7 @@ function resetApplication() {
   
   DOM.painelRefinamento.classList.add('hidden');
   DOM.summaryPanel.classList.add('hidden');
+  DOM.possibleMatchesPanel.classList.add('hidden');
   showToast('Sessão limpa. Pronto para uma nova conciliação!', 'success');
 }
 
@@ -306,6 +313,124 @@ function exportarCSV(dados, nomeArquivo) {
   showToast(`Arquivo ${nomeArquivo} gerado!`, 'success');
 }
 
+// --- FUNÇÕES DE LÓGICA DE SUGESTÃO ---
+
+function normalizeText(s = '') {
+  return String(s).toUpperCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function levenshteinDistance(a = '', b = '') {
+  if (a === b) return 1;
+  const la = a.length, lb = b.length;
+  if (la === 0 || lb === 0) return 0;
+  const matrix = Array.from({ length: la + 1 }, () => new Array(lb + 1).fill(0));
+  for (let i = 0; i <= la; i++) matrix[i][0] = i;
+  for (let j = 0; j <= lb; j++) matrix[0][j] = j;
+  for (let i = 1; i <= la; i++) {
+    for (let j = 1; j <= lb; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j - 1] + cost);
+    }
+  }
+  const dist = matrix[la][lb];
+  const maxLen = Math.max(la, lb);
+  return 1 - (dist / maxLen);
+}
+
+function encontrarPossiveisMatches(bancoRest, orcRest) {
+  const suggestions = new Map(); 
+  
+  bancoRest.forEach((bancoItem) => {
+    orcRest.forEach((orcItem) => {
+      const valorBanco = Math.round(bancoItem.valor * 100);
+      const valorOrc = Math.round(orcItem[1] * 100);
+
+      if (valorBanco === valorOrc) { 
+        const descBancoNorm = normalizeText(bancoItem.descricao);
+        const descOrcNorm = normalizeText(orcItem[0]);
+        
+        if (descBancoNorm !== descOrcNorm) {
+          const score = levenshteinDistance(descBancoNorm, descOrcNorm);
+          if (score > 0.3) {
+             const key = bancoItem.descricao + bancoItem.valor;
+             if (!suggestions.has(key) || suggestions.get(key).score < score) {
+                suggestions.set(key, { bancoItem, orcItem, score });
+             }
+          }
+        }
+      }
+    });
+  });
+  
+  const possible = Array.from(suggestions.values());
+  possible.sort((a, b) => b.score - a.score);
+  return possible;
+}
+
+function renderPossibleMatches() {
+    const matches = appState.possibleMatches;
+    const tbl = DOM.possibleMatchesTbl;
+    tbl.innerHTML = `<thead><tr>
+        <th>Banco (Descrição)</th>
+        <th>Orçamento (Descrição)</th>
+        <th>Valor (R$)</th>
+        <th>Confiança</th>
+        <th>Ação</th>
+    </tr></thead>`;
+    const tbody = document.createElement('tbody');
+
+    if (!matches.length) {
+        DOM.possibleMatchesPanel.classList.add('hidden');
+        return;
+    }
+
+    DOM.possibleMatchesPanel.classList.remove('hidden');
+    matches.forEach((match, index) => {
+        const tr = tbody.insertRow();
+        tr.className = 'possible-match-row';
+        tr.dataset.matchIndex = index;
+
+        tr.insertCell().innerText = match.bancoItem.descricao;
+        tr.insertCell().innerText = match.orcItem[0];
+        tr.insertCell().innerText = match.bancoItem.valor.toFixed(2);
+        
+        const scoreClass = match.score >= 0.8 ? 'high' : (match.score >= 0.5 ? 'medium' : 'low');
+        tr.insertCell().innerHTML = `<span class="match-score ${scoreClass}">${(match.score * 100).toFixed(0)}%</span>`;
+
+        const actionCell = tr.insertCell();
+        actionCell.className = 'possible-match-actions';
+        actionCell.innerHTML = `
+            <button class="btn-accept" title="Confirmar conciliação">✓</button>
+            <button class="btn-reject" title="Marcar como discrepância">✕</button>
+        `;
+    });
+    tbl.appendChild(tbody);
+}
+
+function handleMatchAction(e) {
+    const button = e.target.closest('button');
+    if (!button) return;
+
+    const tr = button.closest('tr');
+    if (!tr || !tr.dataset.matchIndex) return;
+    
+    const matchIndex = parseInt(tr.dataset.matchIndex, 10);
+    const match = appState.possibleMatches[matchIndex];
+
+    if (!match) return;
+
+    if (button.classList.contains('btn-accept')) {
+        appState.dadosBanco = appState.dadosBanco.filter(item => item !== match.bancoItem);
+        appState.dadosOrcamento = appState.dadosOrcamento.filter(item => item !== match.orcItem);
+        showToast('Conciliação confirmada!', 'success');
+    } else if (button.classList.contains('btn-reject')) {
+        showToast('Sugestão ignorada.', 'info');
+    }
+    
+    appState.possibleMatches.splice(matchIndex, 1);
+    comparar(); 
+}
+
 // --- LÓGICA DE CONCILIAÇÃO ---
 
 const criarChaveExata = linha => `${String(linha[0]).toUpperCase().replace(/\s+/g,' ').trim()}_${(Math.round(linha[1]*100)/100).toFixed(2)}`;
@@ -317,33 +442,74 @@ function comparar() {
     return;
   }
   
-  const dadosBancoConciliacao = appState.dadosBanco.map(l => [l.descricao, l.valor]);
-  const chBancoEx = new Set(dadosBancoConciliacao.map(criarChaveExata));
-  const chOrcEx = new Set(appState.dadosOrcamento.map(criarChaveExata));
+  // PASSO 1: Conciliação exata
+  const chavesOrcamentoExatas = new Set(appState.dadosOrcamento.map(criarChaveExata));
+  const bancoConciliados = new Set();
+  const orcamentoConciliados = new Set();
+
+  appState.dadosBanco.forEach(bancoItem => {
+    const chave = criarChaveExata([bancoItem.descricao, bancoItem.valor]);
+    if (chavesOrcamentoExatas.has(chave)) {
+      bancoConciliados.add(bancoItem);
+    }
+  });
+
+  const chavesBancoExatas = new Set(appState.dadosBanco.map(item => criarChaveExata([item.descricao, item.valor])));
+  appState.dadosOrcamento.forEach(orcItem => {
+    const chave = criarChaveExata(orcItem);
+    if (chavesBancoExatas.has(chave)) {
+      orcamentoConciliados.add(orcItem);
+    }
+  });
   
-  const bancoRest = dadosBancoConciliacao.filter(l => !chOrcEx.has(criarChaveExata(l)));
-  const orcRest = appState.dadosOrcamento.filter(l => !chBancoEx.has(criarChaveExata(l)));
+  let bancoRestante = appState.dadosBanco.filter(item => !bancoConciliados.has(item));
+  let orcRestante = appState.dadosOrcamento.filter(item => !orcamentoConciliados.has(item));
+
+  // PASSO 2: Encontrar e APRESENTAR possíveis matches
+  if (!appState.possibleMatches || appState.possibleMatches.length === 0) {
+      appState.possibleMatches = encontrarPossiveisMatches(bancoRestante, orcRestante);
+  }
+
+  if (appState.possibleMatches.length > 0) {
+      renderPossibleMatches();
+      showToast(`Encontramos ${appState.possibleMatches.length} possíveis conciliações para sua revisão.`, 'info');
+      
+      const reconciledCount = appState.dadosBanco.length - bancoRestante.length;
+      animateCounter(DOM.summaryReconciled, 0, reconciledCount, 750);
+      animateCounter(DOM.summaryBank, 0, 0, 750);
+      animateCounter(DOM.summaryBudget, 0, 0, 750);
+      DOM.summaryPanel.classList.remove('hidden');
+
+      mostrarTabela([], 'tabelaBanco', 'Revise as possíveis coincidências acima.');
+      mostrarTabela([], 'tabelaOrcamento', 'Revise as possíveis coincidências acima.');
+      return; 
+  }
   
-  const chBancoPar = new Set(bancoRest.map(criarChaveParcial));
-  const chOrcPar = new Set(orcRest.map(criarChaveParcial));
+  // PASSO 3: Se não há sugestões, calcula as DISCREPÂNCIAS finais (com match parcial)
+  DOM.possibleMatchesPanel.classList.add('hidden');
+
+  const chavesOrcamentoParciais = new Set(orcRestante.map(criarChaveParcial));
+  const chavesBancoParciais = new Set(bancoRestante.map(item => criarChaveParcial([item.descricao, item.valor])));
+
+  appState.discrepBanco = bancoRestante
+      .filter(item => !chavesOrcamentoParciais.has(criarChaveParcial([item.descricao, item.valor])))
+      .map(item => [item.descricao, item.valor]);
   
-  appState.discrepBanco = bancoRest.filter(l => !chOrcPar.has(criarChaveParcial(l)));
-  appState.discrepOrc = orcRest.filter(l => !chBancoPar.has(criarChaveParcial(l)));
-  
-  // Atualiza o painel de resumo e o exibe com animação
-  const reconciledCount = appState.dadosBanco.length - appState.discrepBanco.length;
-  const animationDuration = 750; // em ms
-  
-  animateCounter(DOM.summaryReconciled, 0, reconciledCount, animationDuration);
-  animateCounter(DOM.summaryBank, 0, appState.discrepBanco.length, animationDuration);
-  animateCounter(DOM.summaryBudget, 0, appState.discrepOrc.length, animationDuration);
-  
+  appState.discrepOrc = orcRestante
+      .filter(item => !chavesBancoParciais.has(criarChaveParcial(item)));
+
+  // PASSO 4: Atualiza o resumo e as tabelas de discrepâncias
+  const reconciledCountFinal = appState.dadosBanco.length - appState.discrepBanco.length;
+  animateCounter(DOM.summaryReconciled, 0, reconciledCountFinal, 750);
+  animateCounter(DOM.summaryBank, 0, appState.discrepBanco.length, 750);
+  animateCounter(DOM.summaryBudget, 0, appState.discrepOrc.length, 750);
   DOM.summaryPanel.classList.remove('hidden');
-  
+
   mostrarTabela(appState.discrepBanco, 'tabelaBanco', 'Nenhuma discrepância encontrada.');
   mostrarTabela(appState.discrepOrc, 'tabelaOrcamento', 'Nenhuma discrepância encontrada.');
   showToast('Comparação concluída!', 'success');
 }
+
 
 // --- EVENT LISTENERS (CENTRALIZADOS) ---
 
@@ -411,15 +577,42 @@ document.addEventListener('DOMContentLoaded', () => {
   DOM.fileBanco.addEventListener('change', e => {
       if(!e.target.files.length) return;
       lerArquivo(e.target.files[0], linhas => {
-          // Placeholder para futura implementação de importação de banco via arquivo
           showToast('Importação de arquivo do banco ainda não implementada.', 'info');
       });
   });
 
-  DOM.btnComparar.addEventListener('click', comparar);
+  DOM.btnComparar.addEventListener('click', () => {
+    appState.possibleMatches = []; // Limpa sugestões anteriores antes de uma nova comparação
+    comparar();
+  });
   
   DOM.btnExportarDiscrepBanco.addEventListener('click', () => exportarCSV(appState.discrepBanco, 'discrepancias_banco.csv'));
   DOM.btnExportarDiscrepOrcamento.addEventListener('click', () => exportarCSV(appState.discrepOrc, 'discrepancias_orcamento.csv'));
+  
+  DOM.possibleMatchesTbl.addEventListener('click', handleMatchAction);
+    
+  DOM.btnAutoMatchHighConfidence.addEventListener('click', () => {
+      const highConfidenceMatches = appState.possibleMatches.filter(m => m.score >= 0.8);
+      if(!highConfidenceMatches.length) {
+          showToast('Nenhuma sugestão de alta confiança para conciliar.', 'info');
+          return;
+      }
+      highConfidenceMatches.forEach(match => {
+          appState.dadosBanco = appState.dadosBanco.filter(item => item !== match.bancoItem);
+          appState.dadosOrcamento = appState.dadosOrcamento.filter(item => item !== match.orcItem);
+      });
+      appState.possibleMatches = appState.possibleMatches.filter(m => m.score < 0.8);
+      showToast(`${highConfidenceMatches.length} itens conciliados automaticamente!`, 'success');
+      comparar();
+  });
+  
+  DOM.btnIgnoreAllPossible.addEventListener('click', () => {
+      if(!appState.possibleMatches.length) return;
+      const count = appState.possibleMatches.length;
+      appState.possibleMatches = []; 
+      showToast(`${count} sugestões ignoradas. Serão tratadas como discrepâncias.`, 'info');
+      comparar();
+  });
 
   // --- INICIALIZAÇÃO ---
   resetApplication();
