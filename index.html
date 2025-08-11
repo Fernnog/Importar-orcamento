@@ -126,6 +126,26 @@
   </div>
 </div>
 
+<!-- Modal para criar Regra Inteligente -->
+<div id="regraInteligenteModal" class="modal-overlay hidden">
+  <div class="modal-content">
+    <button class="modal-close" title="Fechar">&times;</button>
+    <h2>Criar Regra Inteligente</h2>
+    <p>Defina um padrão para que a ferramenta reconheça lançamentos futuros automaticamente, ignorando variações como datas ou números de parcela.</p>
+    
+    <div class="input-group" style="margin-bottom: 20px;">
+      <label for="padrãoBanco" style="font-weight:bold; display:block; margin-bottom:5px;">Se a descrição do Banco começar com:</label>
+      <input type="text" id="padrãoBanco" style="width: 100%; padding: 8px;" placeholder="Ex: PAG*Uber">
+    </div>
+    <div class="input-group">
+      <label for="descricaoBaseOrcamento" style="font-weight:bold; display:block; margin-bottom:5px;">Conciliar com a descrição do Orçamento:</label>
+      <input type="text" id="descricaoBaseOrcamento" style="width: 100%; padding: 8px;" placeholder="Ex: Uber">
+    </div>
+    
+    <button id="btnSalvarRegraInteligente" style="margin-top: 20px; width:100%;" class="btn-export">Salvar Regra Inteligente</button>
+  </div>
+</div>
+
 <!-- Container para as notificações (Toasts) -->
 <div id="toastContainer"></div>
 
@@ -134,6 +154,7 @@
   <div class="spinner"></div>
 </div>
 
+<script src="motor-regras.js" defer></script>
 <script src="script.js" defer></script>
 </body>
 </html>
