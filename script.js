@@ -18,10 +18,10 @@ function getRulesObject() {
   return JSON.parse(localStorage.getItem(RULE_STORAGE_KEY)) || { timestamp: null, regras: [] };
 }
 
-function saveRule(bancoDesc, orcDesc) {
+function saveRule(bancoDesc, orcDesc, type = 'exact') {
   const rulesObj = getRulesObject();
   if (!rulesObj.regras.some(r => r.banco === bancoDesc && r.orc === orcDesc)) {
-    rulesObj.regras.push({ banco: bancoDesc, orc: orcDesc });
+    rulesObj.regras.push({ banco: bancoDesc, orc: orcDesc, type });
     localStorage.setItem(RULE_STORAGE_KEY, JSON.stringify(rulesObj));
     showToast('Regra salva com sucesso!', 'success');
     return true;
@@ -131,6 +131,17 @@ function levenshteinDistance(a = '', b = '') {
   return 1 - (dist / maxLen);
 }
 
+function openIntelligentRuleModal(bancoDesc, orcDesc) {
+    // Sugere um padrão removendo números, barras e parênteses do final
+    const suggestedPattern = bancoDesc.replace(/[\s\d\(\/\)]+$/, '').trim();
+    const suggestedOrcBase = orcDesc.replace(/\s\(\d+\s\/\s\d+\)$/, '').trim();
+
+    DOM.padrãoBanco.value = suggestedPattern;
+    DOM.descricaoBaseOrcamento.value = suggestedOrcBase;
+    
+    DOM.regraInteligenteModal.classList.remove('hidden');
+}
+
 function encontrarPossiveisMatches(bancoRest, orcRest) {
   const suggestions = new Map();
   
@@ -209,7 +220,7 @@ function renderPossibleMatches() {
         actionCell.className = 'possible-match-actions';
         actionCell.innerHTML = `
             <button class="btn-accept" title="Confirmar conciliação">✓</button>
-            <button class="btn-save-rule" title="Confirmar e Salvar Regra">✓+</button>
+            <button class="btn-save-rule" title="Criar Regra Inteligente">✓+</button>
             <button class="btn-reject" title="Marcar como discrepância">✕</button>
         `;
     });
@@ -227,11 +238,12 @@ function handleMatchAction(e) {
     const match = appState.possibleMatches[matchIndex];
     if (!match) return;
 
-    const shouldSaveRule = button.classList.contains('btn-save-rule');
-    if (button.classList.contains('btn-accept') || shouldSaveRule) {
-        if (shouldSaveRule) {
-            saveRule(match.bancoItem.descricao, match.orcItem.descricao);
-        }
+    if (button.classList.contains('btn-save-rule')) {
+        openIntelligentRuleModal(match.bancoItem.descricao, match.orcItem.descricao);
+        return;
+    }
+    
+    if (button.classList.contains('btn-accept')) {
         appState.dadosBanco = appState.dadosBanco.filter(item => item !== match.bancoItem);
         appState.dadosOrcamento = appState.dadosOrcamento.filter(item => item !== match.orcItem);
         showToast('Conciliação confirmada!', 'success');
@@ -254,47 +266,20 @@ function comparar() {
     return;
   }
   
-  // PASSO 0: Aplicar regras salvas
+  // PASSO 0: Aplicar regras salvas USANDO O NOVO MOTOR
   const { regras } = getRulesObject();
-  let bancoRestante = [...appState.dadosBanco];
-  let orcRestante = [...appState.dadosOrcamento];
-  let bancoConciliados = new Set();
-  let orcamentoConciliados = new Set();
-
-  if (regras.length > 0) {
-      const regrasMap = new Map(regras.map(r => [r.banco, r.orc]));
-      const orcMap = new Map();
-      orcRestante.forEach(o => {
-          if (!orcMap.has(o.descricao)) {
-              orcMap.set(o.descricao, []);
-          }
-          orcMap.get(o.descricao).push(o);
-      });
-      
-      bancoRestante.forEach(bancoItem => {
-          const orcDescRegra = regrasMap.get(bancoItem.descricao);
-          if (orcDescRegra && orcMap.has(orcDescRegra)) {
-              const orcCandidates = orcMap.get(orcDescRegra);
-              const valorBanco = Math.round(bancoItem.valor * 100);
-              const orcItemIndex = orcCandidates.findIndex(o => Math.round(o.valor * 100) === valorBanco);
-              
-              if (orcItemIndex > -1) {
-                  const orcItem = orcCandidates[orcItemIndex];
-                  bancoConciliados.add(bancoItem);
-                  orcamentoConciliados.add(orcItem);
-                  orcCandidates.splice(orcItemIndex, 1);
-              }
-          }
-      });
-      if (bancoConciliados.size > 0) {
-        showToast(`${bancoConciliados.size} itens conciliados por regras automáticas.`, 'info');
-      }
+  const { bancoConciliados, orcamentoConciliados } = aplicarRegrasDeConciliacao(
+      appState.dadosBanco, appState.dadosOrcamento, regras
+  );
+  
+  if (bancoConciliados.size > 0) {
+    showToast(`${bancoConciliados.size} itens conciliados por regras automáticas.`, 'info');
   }
 
-  bancoRestante = appState.dadosBanco.filter(i => !bancoConciliados.has(i));
-  orcRestante = appState.dadosOrcamento.filter(i => !orcamentoConciliados.has(i));
+  let bancoRestante = appState.dadosBanco.filter(i => !bancoConciliados.has(i));
+  let orcRestante = appState.dadosOrcamento.filter(i => !orcamentoConciliados.has(i));
   
-  // PASSO 1: Conciliação exata
+  // PASSO 1: Conciliação exata nos itens restantes
   const chavesOrcamentoExatas = new Set(orcRestante.map(criarChaveItem));
   const bancoConciliadosExatos = new Set();
 
@@ -316,11 +301,11 @@ function comparar() {
       return false;
   }));
   
-  bancoConciliados = new Set([...bancoConciliados, ...bancoConciliadosExatos]);
-  orcamentoConciliados = new Set([...orcamentoConciliados, ...orcamentoConciliadosExatos]);
+  const finalBancoConciliados = new Set([...bancoConciliados, ...bancoConciliadosExatos]);
+  const finalOrcamentoConciliados = new Set([...orcamentoConciliados, ...orcamentoConciliadosExatos]);
 
-  bancoRestante = appState.dadosBanco.filter(item => !bancoConciliados.has(item));
-  orcRestante = appState.dadosOrcamento.filter(item => !orcamentoConciliados.has(item));
+  bancoRestante = appState.dadosBanco.filter(item => !finalBancoConciliados.has(item));
+  orcRestante = appState.dadosOrcamento.filter(item => !finalOrcamentoConciliados.has(item));
 
   // PASSO 2: Encontrar e APRESENTAR possíveis matches
   if (!appState.possibleMatches.length) {
@@ -680,6 +665,11 @@ document.addEventListener('DOMContentLoaded', () => {
     importFile: document.getElementById('importFile'),
     infoVersaoRegras: document.getElementById('infoVersaoRegras'),
     timestampRegras: document.getElementById('timestampRegras'),
+    // Novos elementos do Modal de Regra Inteligente
+    regraInteligenteModal: document.getElementById('regraInteligenteModal'),
+    padrãoBanco: document.getElementById('padrãoBanco'),
+    descricaoBaseOrcamento: document.getElementById('descricaoBaseOrcamento'),
+    btnSalvarRegraInteligente: document.getElementById('btnSalvarRegraInteligente'),
   });
 
   const dropTargets = document.querySelectorAll('.summary-panel .metric-item');
@@ -789,8 +779,11 @@ document.addEventListener('DOMContentLoaded', () => {
         DOM.regrasModalPlaceholder.classList.add('hidden');
         regras.forEach(rule => {
             const li = document.createElement('li');
+            const ruleTypeBadge = rule.type === 'pattern' 
+                ? '<span class="rule-type-badge">Padrão</span>' 
+                : '';
             li.innerHTML = `
-                <span><strong>Banco:</strong> ${rule.banco} → <strong>Orçamento:</strong> ${rule.orc}</span>
+                <span><strong>Banco:</strong> ${rule.banco} → <strong>Orçamento:</strong> ${rule.orc}${ruleTypeBadge}</span>
                 <button class="btn-delete-rule" data-banco="${rule.banco}" data-orc="${rule.orc}">Excluir</button>
             `;
             DOM.listaRegras.appendChild(li);
@@ -819,6 +812,31 @@ document.addEventListener('DOMContentLoaded', () => {
   DOM.btnExportarRegras.addEventListener('click', exportarRegras);
   DOM.btnImportarRegras.addEventListener('click', () => DOM.importFile.click());
   DOM.importFile.addEventListener('change', (e) => importarRegras(e.target.files[0]));
+
+  // Listeners para o novo Modal de Regra Inteligente
+  DOM.btnSalvarRegraInteligente.addEventListener('click', () => {
+    const bancoPattern = DOM.padrãoBanco.value.trim();
+    const orcBase = DOM.descricaoBaseOrcamento.value.trim();
+
+    if (!bancoPattern || !orcBase) {
+        showToast("Ambos os campos são obrigatórios.", "error");
+        return;
+    }
+
+    if (saveRule(bancoPattern, orcBase, 'pattern')) {
+        DOM.regraInteligenteModal.classList.add('hidden');
+        showToast('Regra inteligente salva! Reanalisando...', 'info');
+        // Limpa as sugestões e re-executa a comparação. A nova regra será aplicada.
+        appState.possibleMatches = [];
+        comparar();
+    }
+  });
+
+  DOM.regraInteligenteModal.addEventListener('click', (e) => {
+    if (e.target.classList.contains('modal-overlay') || e.target.classList.contains('modal-close')) {
+        DOM.regraInteligenteModal.classList.add('hidden');
+    }
+  });
 
   // --- INICIALIZAÇÃO ---
   resetApplication();
