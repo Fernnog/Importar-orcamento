@@ -103,7 +103,7 @@
   <p>Ferramenta local - Nenhum dado é enviado para servidores.</p>
 </footer>
 
-<!-- Modal de Regras -->
+<!-- Modal de Gerenciamento de Regras -->
 <div id="regrasModal" class="modal-overlay hidden">
   <div class="modal-content">
     <button class="modal-close" title="Fechar">&times;</button>
@@ -126,23 +126,33 @@
   </div>
 </div>
 
-<!-- Modal para criar Regra Inteligente -->
-<div id="regraInteligenteModal" class="modal-overlay hidden">
+<!-- Modal de Criação de Regra Inteligente -->
+<div id="createRuleModal" class="modal-overlay hidden">
   <div class="modal-content">
     <button class="modal-close" title="Fechar">&times;</button>
-    <h2>Criar Regra Inteligente</h2>
-    <p>Defina um padrão para que a ferramenta reconheça lançamentos futuros automaticamente, ignorando variações como datas ou números de parcela.</p>
+    <h2>Criar Nova Regra de Conciliação</h2>
+    <p>Detectamos uma possível compra recorrente. Como deseja salvar esta regra?</p>
     
-    <div class="input-group" style="margin-bottom: 20px;">
-      <label for="padrãoBanco" style="font-weight:bold; display:block; margin-bottom:5px;">Se a descrição do Banco começar com:</label>
-      <input type="text" id="padrãoBanco" style="width: 100%; padding: 8px;" placeholder="Ex: PAG*Uber">
-    </div>
-    <div class="input-group">
-      <label for="descricaoBaseOrcamento" style="font-weight:bold; display:block; margin-bottom:5px;">Conciliar com a descrição do Orçamento:</label>
-      <input type="text" id="descricaoBaseOrcamento" style="width: 100%; padding: 8px;" placeholder="Ex: Uber">
+    <div class="rule-options-container">
+      <div class="rule-option">
+        <input type="radio" id="rule-type-exact" name="rule-type" value="exact" checked>
+        <label for="rule-type-exact">
+          <strong>Regra Exata (Padrão)</strong>
+          <span>Funciona apenas para esta combinação exata.</span>
+        </label>
+      </div>
+      <div class="rule-option">
+        <input type="radio" id="rule-type-smart" name="rule-type" value="smart">
+        <label for="rule-type-smart">
+          <strong>Regra Inteligente (Recomendado)</strong>
+          <span id="smart-rule-preview"></span>
+        </label>
+      </div>
     </div>
     
-    <button id="btnSalvarRegraInteligente" style="margin-top: 20px; width:100%;" class="btn-export">Salvar Regra Inteligente</button>
+    <div class="modal-actions" style="justify-content: flex-end;">
+        <button id="btnConfirmarSalvarRegra" class="btn-export">Salvar Regra</button>
+    </div>
   </div>
 </div>
 
@@ -154,7 +164,6 @@
   <div class="spinner"></div>
 </div>
 
-<script src="motor-regras.js" defer></script>
 <script src="script.js" defer></script>
 </body>
 </html>

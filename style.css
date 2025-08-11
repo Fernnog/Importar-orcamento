@@ -380,7 +380,7 @@ th {
   100% { transform: rotate(360deg); }
 }
 
-/* Modal de Regras */
+/* Modals */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -471,15 +471,41 @@ th {
   margin: 0;
 }
 
-#listaRegras li .rule-type-badge {
-  font-size: 10px;
-  font-weight: bold;
-  padding: 2px 6px;
-  border-radius: 8px;
-  background-color: var(--color-pink);
-  color: var(--color-white);
-  margin-left: 8px;
-  text-transform: uppercase;
+.rule-options-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin: 20px 0;
+}
+.rule-option {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 15px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.rule-option:hover {
+  border-color: var(--color-blue);
+}
+.rule-option input[type="radio"] {
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+.rule-option label {
+  cursor: pointer;
+  width: 100%;
+}
+.rule-option label strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--color-text-dark);
+}
+.rule-option label span {
+  color: var(--color-text-light);
+  font-size: 14px;
 }
 
 /* --- 5. UTILITY CLASSES --- */

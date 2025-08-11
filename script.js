@@ -18,16 +18,18 @@ function getRulesObject() {
   return JSON.parse(localStorage.getItem(RULE_STORAGE_KEY)) || { timestamp: null, regras: [] };
 }
 
-function saveRule(bancoDesc, orcDesc, type = 'exact') {
+function saveRule(rule) {
   const rulesObj = getRulesObject();
-  if (!rulesObj.regras.some(r => r.banco === bancoDesc && r.orc === orcDesc)) {
-    rulesObj.regras.push({ banco: bancoDesc, orc: orcDesc, type });
+  const ruleExists = rulesObj.regras.some(r => 
+      r.type === rule.type && r.banco === rule.banco && r.orc === rule.orc
+  );
+  if (!ruleExists) {
+    rulesObj.regras.push(rule);
     localStorage.setItem(RULE_STORAGE_KEY, JSON.stringify(rulesObj));
     showToast('Regra salva com sucesso!', 'success');
-    return true;
+  } else {
+    showToast('Esta regra já existe.', 'info');
   }
-  showToast('Esta regra já existe.', 'info');
-  return false;
 }
 
 function deleteRule(bancoDesc, orcDesc) {
@@ -99,6 +101,10 @@ function importarRegras(file) {
     reader.readAsText(file);
 }
 
+function extractPattern(text) {
+    return text.replace(/(\s*\(?\d+\s*\/?\s*\d+\)?\s*)$/, '').trim();
+}
+
 // --- FUNÇÕES DE LÓGICA DE SUGESTÃO ---
 function normalizeText(s = '') {
   return String(s).toUpperCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
@@ -129,17 +135,6 @@ function levenshteinDistance(a = '', b = '') {
   const dist = matrix[la][lb];
   const maxLen = Math.max(la, lb);
   return 1 - (dist / maxLen);
-}
-
-function openIntelligentRuleModal(bancoDesc, orcDesc) {
-    // Sugere um padrão removendo números, barras e parênteses do final
-    const suggestedPattern = bancoDesc.replace(/[\s\d\(\/\)]+$/, '').trim();
-    const suggestedOrcBase = orcDesc.replace(/\s\(\d+\s\/\s\d+\)$/, '').trim();
-
-    DOM.padrãoBanco.value = suggestedPattern;
-    DOM.descricaoBaseOrcamento.value = suggestedOrcBase;
-    
-    DOM.regraInteligenteModal.classList.remove('hidden');
 }
 
 function encontrarPossiveisMatches(bancoRest, orcRest) {
@@ -220,7 +215,7 @@ function renderPossibleMatches() {
         actionCell.className = 'possible-match-actions';
         actionCell.innerHTML = `
             <button class="btn-accept" title="Confirmar conciliação">✓</button>
-            <button class="btn-save-rule" title="Criar Regra Inteligente">✓+</button>
+            <button class="btn-save-rule" title="Confirmar e Salvar Regra">✓+</button>
             <button class="btn-reject" title="Marcar como discrepância">✕</button>
         `;
     });
@@ -239,7 +234,7 @@ function handleMatchAction(e) {
     if (!match) return;
 
     if (button.classList.contains('btn-save-rule')) {
-        openIntelligentRuleModal(match.bancoItem.descricao, match.orcItem.descricao);
+        openCreateRuleModal(match);
         return;
     }
     
@@ -255,31 +250,85 @@ function handleMatchAction(e) {
     comparar(); 
 }
 
+function openCreateRuleModal(match) {
+    const bancoPattern = extractPattern(match.bancoItem.descricao);
+    const orcPattern = extractPattern(match.orcItem.descricao);
+
+    DOM.createRuleModal.dataset.bancoDesc = match.bancoItem.descricao;
+    DOM.createRuleModal.dataset.orcDesc = match.orcItem.descricao;
+    DOM.createRuleModal.dataset.bancoPattern = bancoPattern;
+    DOM.createRuleModal.dataset.orcPattern = orcPattern;
+    DOM.createRuleModal.dataset.matchIndex = appState.possibleMatches.indexOf(match);
+
+    DOM.smartRulePreview.textContent = `Irá associar itens que comecem com "${bancoPattern}" (banco) a itens que comecem com "${orcPattern}" (orçamento).`;
+    
+    DOM.ruleTypeExact.checked = true;
+    DOM.createRuleModal.classList.remove('hidden');
+}
 
 // --- LÓGICA DE CONCILIAÇÃO ---
 const criarChaveItem = item => `${normalizeText(item.descricao)}_${(Math.round(item.valor*100)/100).toFixed(2)}`;
 const criarChaveParcialItem = item => `${normalizeText(item.descricao).substring(0,8)}_${(Math.round(item.valor*100)/100).toFixed(2)}`;
 
 function comparar() {
-  if (!appState.dadosBanco.length && !appState.dadosOrcamento.length) {
+  if (!appState.dadosBanco.length || !appState.dadosOrcamento.length) {
     showToast("Importe os dados do banco e do orçamento antes de comparar.", 'error');
     return;
   }
   
-  // PASSO 0: Aplicar regras salvas USANDO O NOVO MOTOR
+  // PASSO 0: Aplicar regras salvas
   const { regras } = getRulesObject();
-  const { bancoConciliados, orcamentoConciliados } = aplicarRegrasDeConciliacao(
-      appState.dadosBanco, appState.dadosOrcamento, regras
-  );
-  
-  if (bancoConciliados.size > 0) {
-    showToast(`${bancoConciliados.size} itens conciliados por regras automáticas.`, 'info');
+  let bancoRestante = [...appState.dadosBanco];
+  let orcRestante = [...appState.dadosOrcamento];
+  let bancoConciliados = new Set();
+  let orcamentoConciliados = new Set();
+
+  if (regras.length > 0) {
+      const orcMap = new Map();
+      orcRestante.forEach(o => {
+          if (!orcMap.has(o.descricao)) orcMap.set(o.descricao, []);
+          orcMap.get(o.descricao).push(o);
+      });
+
+      regras.forEach(rule => {
+          if (rule.type === 'smart') {
+              bancoRestante.forEach(bancoItem => {
+                  if (bancoItem.descricao.startsWith(rule.banco)) {
+                      orcRestante.forEach(orcItem => {
+                          if (orcItem.descricao.startsWith(rule.orc) && Math.round(bancoItem.valor * 100) === Math.round(orcItem.valor * 100)) {
+                              if (!bancoConciliados.has(bancoItem) && !orcamentoConciliados.has(orcItem)) {
+                                  bancoConciliados.add(bancoItem);
+                                  orcamentoConciliados.add(orcItem);
+                              }
+                          }
+                      });
+                  }
+              });
+          } else { // Regra 'exact'
+              const orcCandidates = orcMap.get(rule.orc) || [];
+              bancoRestante.forEach(bancoItem => {
+                  if (bancoItem.descricao === rule.banco) {
+                      const valorBanco = Math.round(bancoItem.valor * 100);
+                      const orcItemIndex = orcCandidates.findIndex(o => Math.round(o.valor * 100) === valorBanco && !orcamentoConciliados.has(o));
+                      if (orcItemIndex > -1) {
+                          if (!bancoConciliados.has(bancoItem)) {
+                              bancoConciliados.add(bancoItem);
+                              orcamentoConciliados.add(orcCandidates[orcItemIndex]);
+                          }
+                      }
+                  }
+              });
+          }
+      });
+      if (bancoConciliados.size > 0) {
+        showToast(`${bancoConciliados.size} itens conciliados por regras automáticas.`, 'info');
+      }
   }
 
-  let bancoRestante = appState.dadosBanco.filter(i => !bancoConciliados.has(i));
-  let orcRestante = appState.dadosOrcamento.filter(i => !orcamentoConciliados.has(i));
+  bancoRestante = appState.dadosBanco.filter(i => !bancoConciliados.has(i));
+  orcRestante = appState.dadosOrcamento.filter(i => !orcamentoConciliados.has(i));
   
-  // PASSO 1: Conciliação exata nos itens restantes
+  // PASSO 1: Conciliação exata
   const chavesOrcamentoExatas = new Set(orcRestante.map(criarChaveItem));
   const bancoConciliadosExatos = new Set();
 
@@ -293,6 +342,7 @@ function comparar() {
 
   const chavesBancoConciliadasExatas = new Set(Array.from(bancoConciliadosExatos).map(criarChaveItem));
   const orcamentoConciliadosExatos = new Set(orcRestante.filter(item => {
+      if(orcamentoConciliados.has(item)) return false;
       const chave = criarChaveItem(item);
       if(chavesBancoConciliadasExatas.has(chave)){
           chavesBancoConciliadasExatas.delete(chave);
@@ -301,11 +351,11 @@ function comparar() {
       return false;
   }));
   
-  const finalBancoConciliados = new Set([...bancoConciliados, ...bancoConciliadosExatos]);
-  const finalOrcamentoConciliados = new Set([...orcamentoConciliados, ...orcamentoConciliadosExatos]);
+  bancoConciliados = new Set([...bancoConciliados, ...bancoConciliadosExatos]);
+  orcamentoConciliados = new Set([...orcamentoConciliados, ...orcamentoConciliadosExatos]);
 
-  bancoRestante = appState.dadosBanco.filter(item => !finalBancoConciliados.has(item));
-  orcRestante = appState.dadosOrcamento.filter(item => !finalOrcamentoConciliados.has(item));
+  bancoRestante = appState.dadosBanco.filter(item => !bancoConciliados.has(item));
+  orcRestante = appState.dadosOrcamento.filter(item => !orcamentoConciliados.has(item));
 
   // PASSO 2: Encontrar e APRESENTAR possíveis matches
   if (!appState.possibleMatches.length) {
@@ -665,11 +715,10 @@ document.addEventListener('DOMContentLoaded', () => {
     importFile: document.getElementById('importFile'),
     infoVersaoRegras: document.getElementById('infoVersaoRegras'),
     timestampRegras: document.getElementById('timestampRegras'),
-    // Novos elementos do Modal de Regra Inteligente
-    regraInteligenteModal: document.getElementById('regraInteligenteModal'),
-    padrãoBanco: document.getElementById('padrãoBanco'),
-    descricaoBaseOrcamento: document.getElementById('descricaoBaseOrcamento'),
-    btnSalvarRegraInteligente: document.getElementById('btnSalvarRegraInteligente'),
+    createRuleModal: document.getElementById('createRuleModal'),
+    btnConfirmarSalvarRegra: document.getElementById('btnConfirmarSalvarRegra'),
+    smartRulePreview: document.getElementById('smart-rule-preview'),
+    ruleTypeExact: document.getElementById('rule-type-exact'),
   });
 
   const dropTargets = document.querySelectorAll('.summary-panel .metric-item');
@@ -760,7 +809,7 @@ document.addEventListener('DOMContentLoaded', () => {
       comparar();
   });
 
-  // Listeners para o Modal de Regras
+  // Listeners para o Modal de Gerenciamento de Regras
   DOM.btnGerenciarRegras.addEventListener('click', () => {
     DOM.regrasModal.classList.toggle('hidden');
     if (DOM.regrasModal.classList.contains('hidden')) return;
@@ -779,11 +828,8 @@ document.addEventListener('DOMContentLoaded', () => {
         DOM.regrasModalPlaceholder.classList.add('hidden');
         regras.forEach(rule => {
             const li = document.createElement('li');
-            const ruleTypeBadge = rule.type === 'pattern' 
-                ? '<span class="rule-type-badge">Padrão</span>' 
-                : '';
             li.innerHTML = `
-                <span><strong>Banco:</strong> ${rule.banco} → <strong>Orçamento:</strong> ${rule.orc}${ruleTypeBadge}</span>
+                <span><strong>Banco:</strong> ${rule.banco} → <strong>Orçamento:</strong> ${rule.orc}</span>
                 <button class="btn-delete-rule" data-banco="${rule.banco}" data-orc="${rule.orc}">Excluir</button>
             `;
             DOM.listaRegras.appendChild(li);
@@ -813,29 +859,35 @@ document.addEventListener('DOMContentLoaded', () => {
   DOM.btnImportarRegras.addEventListener('click', () => DOM.importFile.click());
   DOM.importFile.addEventListener('change', (e) => importarRegras(e.target.files[0]));
 
-  // Listeners para o novo Modal de Regra Inteligente
-  DOM.btnSalvarRegraInteligente.addEventListener('click', () => {
-    const bancoPattern = DOM.padrãoBanco.value.trim();
-    const orcBase = DOM.descricaoBaseOrcamento.value.trim();
+  // Listeners para o Modal de Criação de Regra
+  DOM.btnConfirmarSalvarRegra.addEventListener('click', () => {
+      const ruleType = document.querySelector('input[name="rule-type"]:checked').value;
+      const { bancoDesc, orcDesc, bancoPattern, orcPattern, matchIndex } = DOM.createRuleModal.dataset;
 
-    if (!bancoPattern || !orcBase) {
-        showToast("Ambos os campos são obrigatórios.", "error");
-        return;
-    }
+      let ruleToSave;
+      if (ruleType === 'smart') {
+          ruleToSave = { type: 'smart', banco: bancoPattern, orc: orcPattern };
+      } else {
+          ruleToSave = { type: 'exact', banco: bancoDesc, orc: orcDesc };
+      }
+      saveRule(ruleToSave);
 
-    if (saveRule(bancoPattern, orcBase, 'pattern')) {
-        DOM.regraInteligenteModal.classList.add('hidden');
-        showToast('Regra inteligente salva! Reanalisando...', 'info');
-        // Limpa as sugestões e re-executa a comparação. A nova regra será aplicada.
-        appState.possibleMatches = [];
+      // Concilia o item e continua o fluxo
+      const match = appState.possibleMatches[parseInt(matchIndex, 10)];
+      if(match) {
+        appState.dadosBanco = appState.dadosBanco.filter(item => item !== match.bancoItem);
+        appState.dadosOrcamento = appState.dadosOrcamento.filter(item => item !== match.orcItem);
+        appState.possibleMatches.splice(parseInt(matchIndex, 10), 1);
         comparar();
-    }
+      }
+      
+      DOM.createRuleModal.classList.add('hidden');
   });
 
-  DOM.regraInteligenteModal.addEventListener('click', (e) => {
-    if (e.target.classList.contains('modal-overlay') || e.target.classList.contains('modal-close')) {
-        DOM.regraInteligenteModal.classList.add('hidden');
-    }
+  DOM.createRuleModal.addEventListener('click', (e) => {
+      if (e.target.classList.contains('modal-overlay') || e.target.classList.contains('modal-close')) {
+          DOM.createRuleModal.classList.add('hidden');
+      }
   });
 
   // --- INICIALIZAÇÃO ---
