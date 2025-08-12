@@ -145,7 +145,6 @@ h2 {
   background-color: var(--color-green-dark);
 }
 
-/* A classe base '.panel-title' agora é usada para o Resumo também, então a regra se aplica a ele. */
 .summary-panel .panel-title {
   display: inline-block;
   padding: 5px 12px;
@@ -307,6 +306,7 @@ button:disabled {
 .action-center {
   text-align: center;
 }
+
 .action-center.top-fixed {
   padding: 5px 20px 25px;
   background-color: var(--color-background-light);
@@ -316,10 +316,12 @@ button:disabled {
   transform: translateY(-20px);
   opacity: 0;
 }
+
 .action-center.top-fixed:not(.hidden) {
   transform: translateY(0);
   opacity: 1;
 }
+
 .action-center.top-fixed button {
   width: auto;
   padding: 12px 40px;
@@ -330,6 +332,7 @@ button:disabled {
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   transition: all 0.2s ease-in-out;
 }
+
 .action-center.top-fixed button:hover {
   background-color: var(--color-pink-dark);
   transform: translateY(-2px);
@@ -417,6 +420,7 @@ th {
 .toast.info { background-color: var(--color-blue); }
 .toast.success { background-color: var(--color-green); }
 .toast.error { background-color: var(--color-red-error); }
+.toast.warning { background-color: var(--color-yellow); color: var(--color-text-dark); }
 @keyframes slideIn {
   to { opacity: 1; transform: translateX(0); }
 }
