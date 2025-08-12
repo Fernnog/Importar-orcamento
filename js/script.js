@@ -270,16 +270,6 @@ function openCreateRuleModal(match) {
 const criarChaveItem = item => `${normalizeText(item.descricao)}_${(Math.round(item.valor*100)/100).toFixed(2)}`;
 const criarChaveParcialItem = item => `${normalizeText(item.descricao).substring(0,8)}_${(Math.round(item.valor*100)/100).toFixed(2)}`;
 
-function renderLog(logEntries) {
-    if (!logEntries || logEntries.length === 0) {
-        DOM.logPanel.classList.add('hidden');
-        return;
-    }
-    DOM.logList.innerHTML = logEntries.map(entry => `<li>${entry}</li>`).join('');
-    DOM.logPanel.classList.remove('hidden');
-    DOM.logList.classList.remove('no-results');
-}
-
 function comparar() {
   if (!appState.dadosBanco.length || !appState.dadosOrcamento.length) {
     showToast("Importe os dados do banco e do orçamento antes de comparar.", 'error');
@@ -288,21 +278,18 @@ function comparar() {
   
   let logEntries = [];
   
-  // PASSO 0: Aplicar regras salvas usando o motor de regras
+  // PASSO 0: Aplicar regras salvas (USANDO O MOTOR DE REGRAS EXTERNO)
   const { regras } = getRulesObject();
-  let bancoRestante = [...appState.dadosBanco];
-  let orcRestante = [...appState.dadosOrcamento];
-
-  const { bancoConciliados, orcamentoConciliados } = aplicarRegrasDeConciliacao(bancoRestante, orcRestante, regras);
-      
+  const { bancoConciliados, orcamentoConciliados } = aplicarRegrasDeConciliacao(appState.dadosBanco, appState.dadosOrcamento, regras);
+  
   if (bancoConciliados.size > 0) {
     const msg = `✅ ${bancoConciliados.size} itens conciliados por regras automáticas.`;
     logEntries.push(msg);
     showToast(msg, 'info');
   }
 
-  bancoRestante = appState.dadosBanco.filter(i => !bancoConciliados.has(i));
-  orcRestante = appState.dadosOrcamento.filter(i => !orcamentoConciliados.has(i));
+  let bancoRestante = appState.dadosBanco.filter(i => !bancoConciliados.has(i));
+  let orcRestante = appState.dadosOrcamento.filter(i => !orcamentoConciliados.has(i));
   
   // PASSO 1: Conciliação exata
   const chavesOrcamentoExatas = new Set(orcRestante.map(criarChaveItem));
@@ -331,11 +318,12 @@ function comparar() {
       return false;
   }));
   
-  const todosBancoConciliados = new Set([...bancoConciliados, ...bancoConciliadosExatos]);
-  const todosOrcamentoConciliados = new Set([...orcamentoConciliados, ...orcamentoConciliadosExatos]);
+  // Adiciona os conciliados exatos aos conjuntos totais
+  bancoConciliadosExatos.forEach(item => bancoConciliados.add(item));
+  orcamentoConciliadosExatos.forEach(item => orcamentoConciliados.add(item));
 
-  bancoRestante = appState.dadosBanco.filter(item => !todosBancoConciliados.has(item));
-  orcRestante = appState.dadosOrcamento.filter(item => !todosOrcamentoConciliados.has(item));
+  bancoRestante = appState.dadosBanco.filter(item => !bancoConciliados.has(item));
+  orcRestante = appState.dadosOrcamento.filter(item => !orcamentoConciliados.has(item));
 
   // PASSO 2: Encontrar e APRESENTAR possíveis matches
   if (!appState.possibleMatches.length) {
@@ -570,6 +558,16 @@ function mostrarTabela(dados, id, noResultsMessage = 'Nenhum dado encontrado.') 
     });
   }
   tbl.appendChild(tbody);
+}
+
+function renderLog(logEntries) {
+    if (!logEntries || logEntries.length === 0) {
+        DOM.logPanel.classList.add('hidden');
+        return;
+    }
+    DOM.logList.innerHTML = logEntries.map(entry => `<li>${entry}</li>`).join('');
+    DOM.logPanel.classList.remove('hidden');
+    DOM.logList.classList.remove('no-results');
 }
 
 async function exportarXLSX(dados, nomeArquivo) {
