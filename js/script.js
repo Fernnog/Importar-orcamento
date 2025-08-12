@@ -396,6 +396,17 @@ function animateCounter(element, start, end, duration) {
     window.requestAnimationFrame(step);
 }
 
+function updateCompareButtonVisibility() {
+  const hasBankData = appState.dadosBanco.length > 0;
+  const hasBudgetData = appState.dadosOrcamento.length > 0;
+
+  if (hasBankData && hasBudgetData) {
+    DOM.actionCenter.classList.remove('hidden');
+  } else {
+    DOM.actionCenter.classList.add('hidden');
+  }
+}
+
 // --- FUNÇÕES DE RESET ---
 function resetApplication() {
   Object.assign(appState, {
@@ -416,6 +427,9 @@ function resetApplication() {
   DOM.possibleMatchesPanel.classList.add('hidden');
   DOM.logPanel.classList.add('hidden');
   DOM.logList.innerHTML = '';
+  DOM.actionCenter.classList.add('hidden');
+  DOM.bancoTitle.classList.remove('completed');
+  DOM.orcamentoTitle.classList.remove('completed');
   window.Paginador.reset();
   showToast('Sessão limpa. Pronto para uma nova análise!', 'success');
 }
@@ -684,6 +698,9 @@ document.addEventListener('DOMContentLoaded', () => {
     btnProcessarTexto: document.getElementById('btnProcessarTexto'),
     btnRefinarDados: document.getElementById('btnRefinarDados'),
     btnExportarPlanilha: document.getElementById('btnExportarPlanilha'),
+    actionCenter: document.getElementById('actionCenter'),
+    bancoTitle: document.getElementById('bancoTitle'),
+    orcamentoTitle: document.getElementById('orcamentoTitle'),
     btnComparar: document.getElementById('btnComparar'),
     btnExportarDiscrepBanco: document.getElementById('btnExportarDiscrepBanco'),
     btnExportarDiscrepOrcamento: document.getElementById('btnExportarDiscrepOrcamento'),
@@ -739,6 +756,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         window.Paginador.updateState({ banco: true });
         abrirModalCopia(lancamentoMaisRecente);
+        DOM.bancoTitle.classList.add('completed');
+        updateCompareButtonVisibility();
         
     } else {
       showToast(`Nenhum lançamento válido encontrado. Verifique o formato.`, 'error');
@@ -771,6 +790,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (appState.dadosOrcamento.length > 0) {
         showToast(`${appState.dadosOrcamento.length} itens importados.`, 'success');
         window.Paginador.updateState({ orcamento: true });
+        DOM.orcamentoTitle.classList.add('completed');
+        updateCompareButtonVisibility();
       }
     });
   });
