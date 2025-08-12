@@ -122,6 +122,21 @@ h2 {
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 
+.panel-title .status-icon {
+  margin-left: 8px;
+  color: var(--color-green-dark);
+  font-weight: bold;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  display: inline-block;
+  transform: scale(0);
+  opacity: 0;
+}
+
+.panel-title.completed .status-icon {
+  transform: scale(1);
+  opacity: 1;
+}
+
 .panel h2.panel-title--banco {
   background-color: var(--color-blue-dark);
 }
@@ -291,17 +306,34 @@ button:disabled {
 
 .action-center {
   text-align: center;
-  margin: 25px 0;
 }
-.action-center button {
-    width: auto;
-    padding: 12px 30px;
-    font-size: 16px;
-    font-weight: bold;
-    background-color: var(--color-pink);
+.action-center.top-fixed {
+  padding: 5px 20px 25px;
+  background-color: var(--color-background-light);
+  border-bottom: 1px solid var(--color-border);
+  margin: -20px -20px 20px -20px;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  transform: translateY(-20px);
+  opacity: 0;
 }
-.action-center button:hover {
-    background-color: var(--color-pink-dark);
+.action-center.top-fixed:not(.hidden) {
+  transform: translateY(0);
+  opacity: 1;
+}
+.action-center.top-fixed button {
+  width: auto;
+  padding: 12px 40px;
+  font-size: 18px;
+  font-weight: bold;
+  background-color: var(--color-pink);
+  margin-top: 0;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  transition: all 0.2s ease-in-out;
+}
+.action-center.top-fixed button:hover {
+  background-color: var(--color-pink-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(0,0,0,0.2);
 }
 
 .discrepancy-section button {
