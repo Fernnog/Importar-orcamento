@@ -401,7 +401,10 @@ function updateCompareButtonVisibility() {
   const hasBudgetData = appState.dadosOrcamento.length > 0;
 
   if (hasBankData && hasBudgetData) {
-    DOM.actionCenter.classList.remove('hidden');
+    if (DOM.actionCenter.classList.contains('hidden')) {
+      DOM.actionCenter.classList.remove('hidden');
+      showToast("Pronto! Dados carregados. Clique em 'Comparar' para iniciar a análise.", 'warning');
+    }
   } else {
     DOM.actionCenter.classList.add('hidden');
   }
@@ -698,10 +701,10 @@ document.addEventListener('DOMContentLoaded', () => {
     btnProcessarTexto: document.getElementById('btnProcessarTexto'),
     btnRefinarDados: document.getElementById('btnRefinarDados'),
     btnExportarPlanilha: document.getElementById('btnExportarPlanilha'),
+    btnComparar: document.getElementById('btnComparar'),
     actionCenter: document.getElementById('actionCenter'),
     bancoTitle: document.getElementById('bancoTitle'),
     orcamentoTitle: document.getElementById('orcamentoTitle'),
-    btnComparar: document.getElementById('btnComparar'),
     btnExportarDiscrepBanco: document.getElementById('btnExportarDiscrepBanco'),
     btnExportarDiscrepOrcamento: document.getElementById('btnExportarDiscrepOrcamento'),
     summaryPanel: document.getElementById('summaryPanel'),
