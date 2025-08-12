@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <title>Análise de Lançamentos para Orçamento</title>
 <link rel="icon" href="imagens/favicon.ico" sizes="any">
-<!-- Caminho atualizado e novo arquivo de estilo -->
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/paginador.css">
 </head>
@@ -24,7 +23,6 @@
 <main>
   <section class="container">
     <div class="panel">
-      <!-- A classe do h2 aqui permanece a mesma -->
       <h2 class="panel-title panel-title--banco">Dados do Banco</h2>
       <input type="file" id="fileBanco" accept=".csv,.xlsx,.xls">
       <h3>Ou colar extrato bruto</h3>
@@ -60,7 +58,6 @@
   </div>
 
   <section id="summaryPanel" class="summary-panel hidden">
-    <!-- CLASSE ADICIONADA AQUI -->
     <h2 class="panel-title panel-title--resumo">Resumo da Conciliação</h2>
     <div class="summary-metrics">
       <div class="metric-item" data-drop-target="reconciled">
@@ -103,21 +100,18 @@
   </section>
 </main>
 
-<!-- NOVO: PAGINADOR FLUTUANTE -->
 <div id="paginador-flutuante" class="hidden">
   <button id="paginador-banco" class="paginador-btn hidden" title="Ir para Dados do Banco">1</button>
   <button id="paginador-orcamento" class="paginador-btn hidden" title="Ir para Dados do Orçamento">2</button>
   <button id="paginador-resumo" class="paginador-btn hidden" title="Ir para Resumo da Conciliação">3</button>
 </div>
 
-<!-- NOVO: MODAL DE CÓPIA -->
 <div id="modalCopia" class="modal-overlay hidden">
   <div class="modal-content">
     <button class="modal-close" title="Fechar">&times;</button>
     <h2>Último Lançamento Processado</h2>
     <p>Confira os dados do último lançamento encontrado no extrato. Você pode copiá-los para a área de transferência.</p>
     <div id="info-copia-container" class="info-versao" style="text-align: center; font-size: 1.1em; padding: 15px;">
-        <!-- O conteúdo será preenchido via JS -->
     </div>
     <div class="modal-actions" style="justify-content: flex-end; border-bottom: none; padding-bottom: 0;">
         <button id="btnCopiarInfo" class="btn-export">Copiar Informação</button>
@@ -129,7 +123,6 @@
   <p>Ferramenta local - Nenhum dado é enviado para servidores.</p>
 </footer>
 
-<!-- Modal de Gerenciamento de Regras -->
 <div id="regrasModal" class="modal-overlay hidden">
   <div class="modal-content">
     <button class="modal-close" title="Fechar">&times;</button>
@@ -152,7 +145,6 @@
   </div>
 </div>
 
-<!-- Modal de Criação de Regra Inteligente -->
 <div id="createRuleModal" class="modal-overlay hidden">
   <div class="modal-content">
     <button class="modal-close" title="Fechar">&times;</button>
@@ -182,16 +174,13 @@
   </div>
 </div>
 
-<!-- Container para as notificações (Toasts) -->
 <div id="toastContainer"></div>
 
-<!-- Spinner de Carregamento (Melhoria UX) -->
 <div id="spinnerOverlay" class="spinner-overlay hidden">
   <div class="spinner"></div>
 </div>
 
-<!-- Caminhos atualizados e novo script -->
-<script src="js/script.js"></script>
-<script src="js/paginador.js"></script>
+<script src="js/paginador.js" defer></script>
+<script src="js/script.js" defer></script>
 </body>
 </html>
