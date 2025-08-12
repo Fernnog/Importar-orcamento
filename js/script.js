@@ -174,7 +174,7 @@ function encontrarPossiveisMatches(bancoRest, orcRest) {
   return possible;
 }
 
-// --- INÍCIO: NOVAS FUNÇÕES DE ORDENAÇÃO E FILTRAGEM ---
+// --- FUNÇÕES DE ORDENAÇÃO E FILTRAGEM ---
 
 function debounce(func, delay = 300) {
     let timeoutId;
@@ -201,7 +201,6 @@ function handleSort(e) {
     
     sortState[tableId] = { key: sortKey, dir: newDir, dataType };
 
-    // Dispara a re-renderização da tabela correta
     rerenderTable(tableId);
 }
 
@@ -231,13 +230,9 @@ function rerenderTable(tableId) {
     }
 }
 
-// --- FIM: NOVAS FUNÇÕES DE ORDENAÇÃO E FILTRAGEM ---
-
-
 function renderPossibleMatches() {
-    let matches = [...appState.possibleMatches]; // Copia para não modificar o original
+    let matches = [...appState.possibleMatches];
 
-    // 1. APLICAR FILTRO
     const tableId = 'possibleMatchesTbl';
     const filterTerm = (filterState[tableId] || '').toLowerCase();
     if (filterTerm) {
@@ -247,7 +242,6 @@ function renderPossibleMatches() {
         );
     }
     
-    // 2. APLICAR ORDENAÇÃO
     const sortInfo = sortState[tableId];
     if (sortInfo) {
         const { key, dir, dataType = 'string' } = sortInfo;
@@ -280,47 +274,53 @@ function renderPossibleMatches() {
 
     const tbody = document.createElement('tbody');
 
-    if (!matches.length) {
+    if (!matches.length && !filterTerm) { // Apenas esconde se não tiver NENHUM match, e não por filtro
         DOM.possibleMatchesPanel.classList.add('hidden');
         return;
     }
-
+    
     DOM.possibleMatchesPanel.classList.remove('hidden');
-    matches.forEach(match => {
-        const originalIndex = appState.possibleMatches.indexOf(match);
-        const tr = tbody.insertRow();
-        tr.className = 'possible-match-row';
-        tr.dataset.matchIndex = originalIndex;
-        tr.draggable = true; 
 
-        tr.addEventListener('dragstart', handleDragStart);
-        tr.addEventListener('dragend', handleDragEnd);
+    if (!matches.length && filterTerm) {
+        tbody.innerHTML = `<tr><td colspan="5" class="no-results">Nenhum resultado para o filtro aplicado.</td></tr>`;
+    } else {
+        matches.forEach(match => {
+            const originalIndex = appState.possibleMatches.indexOf(match);
+            const tr = tbody.insertRow();
+            tr.className = 'possible-match-row';
+            tr.dataset.matchIndex = originalIndex;
+            tr.draggable = true; 
+    
+            tr.addEventListener('dragstart', handleDragStart);
+            tr.addEventListener('dragend', handleDragEnd);
+    
+            const descBancoCell = tr.insertCell();
+            descBancoCell.innerText = match.bancoItem.descricao;
+            if (match.bancoItem.count > 1) {
+                descBancoCell.innerHTML += ` <span class="count-badge banco">${match.bancoItem.count}x</span>`;
+            }
+            
+            const descOrcCell = tr.insertCell();
+            descOrcCell.innerText = match.orcItem.descricao;
+             if (match.orcItem.count > 1) {
+                descOrcCell.innerHTML += ` <span class="count-badge orcamento">${match.orcItem.count}x</span>`;
+            }
+            
+            tr.insertCell().innerText = match.bancoItem.valor.toFixed(2);
+            
+            const scoreClass = match.score >= 0.8 ? 'high' : (match.score >= 0.5 ? 'medium' : 'low');
+            tr.insertCell().innerHTML = `<span class="match-score ${scoreClass}">${(match.score * 100).toFixed(0)}%</span>`;
+    
+            const actionCell = tr.insertCell();
+            actionCell.className = 'possible-match-actions';
+            actionCell.innerHTML = `
+                <button class="btn-accept" title="Confirmar conciliação">✓</button>
+                <button class="btn-save-rule" title="Confirmar e Salvar Regra">✓+</button>
+                <button class="btn-reject" title="Marcar como discrepância">✕</button>
+            `;
+        });
+    }
 
-        const descBancoCell = tr.insertCell();
-        descBancoCell.innerText = match.bancoItem.descricao;
-        if (match.bancoItem.count > 1) {
-            descBancoCell.innerHTML += ` <span class="count-badge banco">${match.bancoItem.count}x</span>`;
-        }
-        
-        const descOrcCell = tr.insertCell();
-        descOrcCell.innerText = match.orcItem.descricao;
-         if (match.orcItem.count > 1) {
-            descOrcCell.innerHTML += ` <span class="count-badge orcamento">${match.orcItem.count}x</span>`;
-        }
-        
-        tr.insertCell().innerText = match.bancoItem.valor.toFixed(2);
-        
-        const scoreClass = match.score >= 0.8 ? 'high' : (match.score >= 0.5 ? 'medium' : 'low');
-        tr.insertCell().innerHTML = `<span class="match-score ${scoreClass}">${(match.score * 100).toFixed(0)}%</span>`;
-
-        const actionCell = tr.insertCell();
-        actionCell.className = 'possible-match-actions';
-        actionCell.innerHTML = `
-            <button class="btn-accept" title="Confirmar conciliação">✓</button>
-            <button class="btn-save-rule" title="Confirmar e Salvar Regra">✓+</button>
-            <button class="btn-reject" title="Marcar como discrepância">✕</button>
-        `;
-    });
     tbl.appendChild(tbody);
 }
 
@@ -518,7 +518,6 @@ function resetApplication() {
     discrepBanco: [], discrepOrc: [], possibleMatches: []
   });
   
-  // Limpa os estados de UI
   sortState = {};
   filterState = {};
   document.querySelectorAll('.table-filter-input').forEach(input => input.value = '');
@@ -559,7 +558,7 @@ function loadXLSXLibrary() {
 }
 
 function parseDate(dateString) {
-    if (!dateString) return new Date(0); // Data inválida para ficar no final
+    if (!dateString) return new Date(0);
     const [day, month, year] = dateString.split('/');
     return new Date(year, month - 1, day);
 }
@@ -599,7 +598,6 @@ function importarTextoBrutoInteligente(texto) {
   const anoCorrente = new Date().getFullYear();
   let dados = [];
 
-  // --- ESTRATÉGIA 1: Tenta processar o formato TABULAR (Desktop) ---
   const regexTabular = /^(\d{2}\/\d{2})\s+(.*?)\s+([\d.,]+)$/;
   
   linhas.forEach(linha => {
@@ -608,10 +606,7 @@ function importarTextoBrutoInteligente(texto) {
       const [, data, descricao, valorStr] = match;
       const dataCompleta = `${data}/${anoCorrente}`;
       const valorNumerico = parseFloat(valorStr.replace(/\./g, '').replace(',', '.'));
-      
-      // Heurística para identificar se é crédito ou débito
       const isCredito = /ajuste cred|pagamento em|crédito/i.test(descricao);
-      
       dados.push({
         data: dataCompleta,
         descricao: descricao.trim(),
@@ -620,7 +615,6 @@ function importarTextoBrutoInteligente(texto) {
     }
   });
 
-  // --- ESTRATÉGIA 2: Se a primeira falhar, tenta o formato de 3 LINHAS (Celular) ---
   if (dados.length === 0) {
     console.log("Formato tabular não detectado, tentando formato de 3 linhas.");
     const regexData = /^\d{2}\/\d{2}$/;
@@ -661,7 +655,7 @@ function processarDadosOrcamento(linhas) {
   return calculateRepetitions(dadosProcessados, keyExtractor);
 }
 
-// --- RENDERIZAÇÃO E EXPORTAÇÃO ---
+// --- RENDERIZAÇÃO E EXPORTAÇÃO (CORRIGIDO) ---
 function mostrarTabelaBanco(dados, id) {
   let dadosParaRenderizar = [...dados];
 
@@ -692,8 +686,10 @@ function mostrarTabelaBanco(dados, id) {
   }
 
   const tbody = document.createElement('tbody');
+  const noResultsMessage = DOM.textoBanco.value.trim() ? 'Nenhum lançamento válido.' : 'Aguardando dados...';
+  
   if (!dadosParaRenderizar || !dadosParaRenderizar.length) {
-    tbody.innerHTML = `<tr><td colspan="3" class="no-results">${DOM.textoBanco.value.trim() ? 'Nenhum lançamento válido.' : 'Aguardando dados...'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="3" class="no-results">${noResultsMessage}</td></tr>`;
   } else {
     dadosParaRenderizar.forEach(l => {
       const row = tbody.insertRow();
@@ -712,7 +708,6 @@ function mostrarTabelaBanco(dados, id) {
 function mostrarTabela(dados, id, noResultsMessage = 'Nenhum dado encontrado.') {
     let dadosParaRenderizar = [...dados];
 
-    // 1. APLICAR FILTRO
     const filterTerm = (filterState[id] || '').toLowerCase();
     if (filterTerm) {
         dadosParaRenderizar = dadosParaRenderizar.filter(item => 
@@ -721,7 +716,6 @@ function mostrarTabela(dados, id, noResultsMessage = 'Nenhum dado encontrado.') 
         noResultsMessage = 'Nenhum resultado para o filtro aplicado.';
     }
 
-    // 2. APLICAR ORDENAÇÃO
     const sortInfo = sortState[id];
     if (sortInfo) {
         const { key, dir, dataType = 'string' } = sortInfo;
@@ -945,7 +939,6 @@ document.addEventListener('DOMContentLoaded', () => {
       target.addEventListener('drop', handleDrop);
   });
   
-  // Adiciona listeners para ordenação e filtragem via delegação de eventos
   const mainElement = document.querySelector('main');
   mainElement.addEventListener('click', handleSort);
   mainElement.addEventListener('input', debouncedHandleFilter);
