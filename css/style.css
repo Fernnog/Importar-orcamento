@@ -130,7 +130,19 @@ h2 {
   background-color: var(--color-green-dark);
 }
 
-.panel h2.panel-title--resumo {
+/* A classe base '.panel-title' agora é usada para o Resumo também, então a regra se aplica a ele. */
+.summary-panel .panel-title {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: 15px;
+  color: var(--color-white);
+  font-size: 18px;
+  margin-bottom: 15px;
+  border-bottom: none;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.panel-title--resumo {
   background-color: var(--color-yellow-dark);
 }
 
@@ -162,7 +174,6 @@ h2 {
 #logList li:last-child {
     border-bottom: none;
 }
-
 
 /* Summary Panel */
 .summary-panel {
