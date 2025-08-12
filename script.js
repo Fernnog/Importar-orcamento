@@ -444,6 +444,7 @@ function resetApplication() {
   DOM.painelRefinamento.classList.add('hidden');
   DOM.summaryPanel.classList.add('hidden');
   DOM.possibleMatchesPanel.classList.add('hidden');
+  window.Paginador.reset();
   showToast('Sessão limpa. Pronto para uma nova análise!', 'success');
 }
 
@@ -459,6 +460,11 @@ function loadXLSXLibrary() {
     script.onerror = () => reject(new Error("Falha ao carregar a biblioteca de planilhas."));
     document.head.appendChild(script);
   });
+}
+
+function parseDate(dateString) {
+    const [day, month, year] = dateString.split('/');
+    return new Date(year, month - 1, day);
 }
 
 async function lerArquivo(file, callback) {
@@ -719,6 +725,9 @@ document.addEventListener('DOMContentLoaded', () => {
     btnConfirmarSalvarRegra: document.getElementById('btnConfirmarSalvarRegra'),
     smartRulePreview: document.getElementById('smart-rule-preview'),
     ruleTypeExact: document.getElementById('rule-type-exact'),
+    modalCopia: document.getElementById('modalCopia'),
+    infoCopiaContainer: document.getElementById('info-copia-container'),
+    btnCopiarInfo: document.getElementById('btnCopiarInfo'),
   });
 
   const dropTargets = document.querySelectorAll('.summary-panel .metric-item');
@@ -736,8 +745,17 @@ document.addEventListener('DOMContentLoaded', () => {
     appState.dadosBanco = [...appState.dadosBancoOriginais];
     mostrarTabelaBanco(appState.dadosBanco, 'previewBanco');
     if (appState.dadosBanco.length > 0) {
-      DOM.painelRefinamento.classList.remove('hidden');
-      showToast(`${appState.dadosBanco.length} lançamentos encontrados.`, 'info');
+        DOM.painelRefinamento.classList.remove('hidden');
+        showToast(`${appState.dadosBanco.length} lançamentos encontrados.`, 'info');
+        
+        const lancamentosOrdenados = [...appState.dadosBanco].sort((a, b) => {
+            return parseDate(b.data) - parseDate(a.data);
+        });
+        const lancamentoMaisRecente = lancamentosOrdenados[0];
+
+        window.Paginador.updateState({ banco: true });
+        abrirModalCopia(lancamentoMaisRecente);
+        
     } else {
       showToast(`Nenhum lançamento válido encontrado. Verifique o formato.`, 'error');
     }
@@ -768,6 +786,7 @@ document.addEventListener('DOMContentLoaded', () => {
       mostrarTabela(appState.dadosOrcamento, 'previewOrcamento', 'Orçamento importado. Pronto para comparar.');
       if (appState.dadosOrcamento.length > 0) {
         showToast(`${appState.dadosOrcamento.length} itens importados.`, 'success');
+        window.Paginador.updateState({ orcamento: true });
       }
     });
   });
@@ -780,6 +799,9 @@ document.addEventListener('DOMContentLoaded', () => {
   DOM.btnComparar.addEventListener('click', () => {
     appState.possibleMatches = [];
     comparar();
+    if (!DOM.summaryPanel.classList.contains('hidden')) {
+        window.Paginador.updateState({ resumo: true });
+    }
   });
   
   DOM.btnExportarDiscrepBanco.addEventListener('click', () => exportarCSV(appState.discrepBanco, 'discrepancias_banco.csv'));
@@ -872,7 +894,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       saveRule(ruleToSave);
 
-      // Concilia o item e continua o fluxo
       const match = appState.possibleMatches[parseInt(matchIndex, 10)];
       if(match) {
         appState.dadosBanco = appState.dadosBanco.filter(item => item !== match.bancoItem);
@@ -887,6 +908,35 @@ document.addEventListener('DOMContentLoaded', () => {
   DOM.createRuleModal.addEventListener('click', (e) => {
       if (e.target.classList.contains('modal-overlay') || e.target.classList.contains('modal-close')) {
           DOM.createRuleModal.classList.add('hidden');
+      }
+  });
+  
+  function abrirModalCopia(item) {
+    if (!item) return;
+    const { data, descricao, valor } = item;
+    const textoFormatado = `Compra no dia ${data}, ${descricao}, Valor R$ ${valor.toFixed(2)}`;
+    
+    DOM.infoCopiaContainer.textContent = textoFormatado;
+    DOM.modalCopia.dataset.textoParaCopiar = textoFormatado;
+    DOM.modalCopia.classList.remove('hidden');
+  }
+
+  DOM.btnCopiarInfo.addEventListener('click', () => {
+    const texto = DOM.modalCopia.dataset.textoParaCopiar;
+    if (texto) {
+        navigator.clipboard.writeText(texto).then(() => {
+            showToast('Informação copiada!', 'success');
+            DOM.modalCopia.classList.add('hidden');
+        }, (err) => {
+            showToast('Falha ao copiar.', 'error');
+            console.error('Erro de cópia: ', err);
+        });
+    }
+  });
+
+  DOM.modalCopia.addEventListener('click', (e) => {
+      if (e.target.classList.contains('modal-overlay') || e.target.classList.contains('modal-close')) {
+          DOM.modalCopia.classList.add('hidden');
       }
   });
 

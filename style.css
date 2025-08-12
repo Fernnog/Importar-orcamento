@@ -4,6 +4,7 @@
   --color-blue: #1e88e5;
   --color-green: #43a047;
   --color-yellow: #fbc02d;
+  --color-yellow-dark: #f9a825;
   --color-red-error: #c0392b;
   
   --color-text-dark: #34495e;
@@ -125,8 +126,13 @@ h2 {
   background-color: var(--color-blue-dark);
 }
 
-.panel h2.panel-title--orcamento {
+.panel h2.panel-title--orcamento,
+.panel h2.panel-title--resumo {
   background-color: var(--color-green-dark);
+}
+
+.panel h2.panel-title--resumo {
+  background-color: var(--color-yellow-dark);
 }
 
 .discrepancy-section {

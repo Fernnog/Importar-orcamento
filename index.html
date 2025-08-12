@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <title>Análise de Lançamentos para Orçamento</title>
 <link rel="icon" href="imagens/favicon.ico" sizes="any">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/paginador.css">
 </head>
 <body>
 
@@ -57,7 +58,7 @@
   </div>
 
   <section id="summaryPanel" class="summary-panel hidden">
-    <h2>Resumo da Conciliação</h2>
+    <h2 class="panel-title panel-title--resumo">Resumo da Conciliação</h2>
     <div class="summary-metrics">
       <div class="metric-item" data-drop-target="reconciled">
         <span class="metric-value" id="summaryReconciled">0</span>
@@ -98,6 +99,25 @@
     <table id="tabelaOrcamento"></table>
   </section>
 </main>
+
+<div id="paginador-flutuante" class="hidden">
+  <button id="paginador-banco" class="paginador-btn hidden" title="Ir para Dados do Banco">1</button>
+  <button id="paginador-orcamento" class="paginador-btn hidden" title="Ir para Dados do Orçamento">2</button>
+  <button id="paginador-resumo" class="paginador-btn hidden" title="Ir para Resumo da Conciliação">3</button>
+</div>
+
+<div id="modalCopia" class="modal-overlay hidden">
+  <div class="modal-content">
+    <button class="modal-close" title="Fechar">&times;</button>
+    <h2>Último Lançamento Processado</h2>
+    <p>Confira os dados do último lançamento encontrado no extrato. Você pode copiá-los para a área de transferência.</p>
+    <div id="info-copia-container" class="info-versao" style="text-align: center; font-size: 1.1em; padding: 15px;">
+    </div>
+    <div class="modal-actions" style="justify-content: flex-end; border-bottom: none; padding-bottom: 0;">
+        <button id="btnCopiarInfo" class="btn-export">Copiar Informação</button>
+    </div>
+  </div>
+</div>
 
 <footer>
   <p>Ferramenta local - Nenhum dado é enviado para servidores.</p>
@@ -164,6 +184,7 @@
   <div class="spinner"></div>
 </div>
 
-<script src="script.js" defer></script>
+<script src="js/script.js" defer></script>
+<script src="js/paginador.js" defer></script>
 </body>
 </html>
