@@ -42,6 +42,12 @@
   box-shadow: 0 2px 6px rgba(0,0,0,0.3);
 }
 
+.paginador-btn.active {
+  transform: scale(1.15);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  border-width: 3px;
+}
+
 .paginador-btn.hidden {
   display: none;
 }

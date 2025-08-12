@@ -126,8 +126,7 @@ h2 {
   background-color: var(--color-blue-dark);
 }
 
-.panel h2.panel-title--orcamento,
-.panel h2.panel-title--resumo {
+.panel h2.panel-title--orcamento {
   background-color: var(--color-green-dark);
 }
 
@@ -141,6 +140,27 @@ h2 {
     border-radius: 8px;
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     margin-top: 20px;
+}
+
+#logPanel {
+    background-color: #fdfaf5;
+    border-left: 4px solid var(--color-pink);
+}
+
+#logList {
+    list-style: none;
+    padding: 0;
+    margin-top: 10px;
+}
+
+#logList li {
+    padding: 8px 5px;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-light);
+}
+
+#logList li:last-child {
+    border-bottom: none;
 }
 
 /* Summary Panel */
