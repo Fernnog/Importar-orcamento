@@ -1,3 +1,5 @@
+// js/script.js
+
 // --- ESTADO CENTRALIZADO DA APLICAÇÃO ---
 const appState = {
   dadosBanco: [],
@@ -370,7 +372,6 @@ function comparar() {
   showToast('Comparação concluída!', 'success');
 }
 
-
 // --- SPINNER, NOTIFICAÇÕES E ANIMAÇÕES (MELHORIA UX) ---
 const showSpinner = () => DOM.spinnerOverlay.classList.remove('hidden');
 const hideSpinner = () => DOM.spinnerOverlay.classList.add('hidden');
@@ -488,17 +489,50 @@ async function lerArquivo(file, callback) {
 
 function importarTextoBrutoInteligente(texto) {
   const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  const anoCorrente = new Date().getFullYear(); const dados = [];
-  const regexData = /^\d{2}\/\d{2}$/; const regexValor = /^[\d.,]+$/;
-  for (let i = 0; i < linhas.length; i++) {
-    if (regexData.test(linhas[i]) && (i + 2 < linhas.length) && regexValor.test(linhas[i + 2])) {
-      const dataCompleta = `${linhas[i]}/${anoCorrente}`;
-      const valorNumerico = parseFloat(linhas[i + 2].replace(/\./g, '').replace(',', '.'));
-      const isCredito = /pagamento em|crédito/i.test(linhas[i + 1]);
-      dados.push({ data: dataCompleta, descricao: linhas[i + 1].trim(), valor: isCredito ? valorNumerico : -valorNumerico });
-      i += 2;
+  const anoCorrente = new Date().getFullYear();
+  let dados = [];
+
+  // --- ESTRATÉGIA 1: Tenta processar o formato TABULAR (Desktop) ---
+  const regexTabular = /^(\d{2}\/\d{2})\s+(.*?)\s+([\d.,]+)$/;
+  
+  linhas.forEach(linha => {
+    const match = linha.match(regexTabular);
+    if (match) {
+      const [, data, descricao, valorStr] = match;
+      const dataCompleta = `${data}/${anoCorrente}`;
+      const valorNumerico = parseFloat(valorStr.replace(/\./g, '').replace(',', '.'));
+      
+      // Heurística para identificar se é crédito ou débito
+      const isCredito = /ajuste cred|pagamento em|crédito/i.test(descricao);
+      
+      dados.push({
+        data: dataCompleta,
+        descricao: descricao.trim(),
+        valor: isCredito ? valorNumerico : -valorNumerico
+      });
+    }
+  });
+
+  // --- ESTRATÉGIA 2: Se a primeira falhar, tenta o formato de 3 LINHAS (Celular) ---
+  if (dados.length === 0) {
+    console.log("Formato tabular não detectado, tentando formato de 3 linhas.");
+    const regexData = /^\d{2}\/\d{2}$/;
+    const regexValor = /^[\d.,]+$/;
+    for (let i = 0; i < linhas.length; i++) {
+      if (regexData.test(linhas[i]) && (i + 2 < linhas.length) && regexValor.test(linhas[i + 2])) {
+        const dataCompleta = `${linhas[i]}/${anoCorrente}`;
+        const valorNumerico = parseFloat(linhas[i + 2].replace(/\./g, '').replace(',', '.'));
+        const isCredito = /pagamento em|crédito/i.test(linhas[i + 1]);
+        dados.push({ 
+          data: dataCompleta, 
+          descricao: linhas[i + 1].trim(), 
+          valor: isCredito ? valorNumerico : -valorNumerico 
+        });
+        i += 2;
+      }
     }
   }
+
   const keyExtractor = item => `${normalizeText(item.descricao)}_${item.valor.toFixed(2)}`;
   return calculateRepetitions(dados, keyExtractor);
 }
@@ -701,10 +735,10 @@ document.addEventListener('DOMContentLoaded', () => {
     btnProcessarTexto: document.getElementById('btnProcessarTexto'),
     btnRefinarDados: document.getElementById('btnRefinarDados'),
     btnExportarPlanilha: document.getElementById('btnExportarPlanilha'),
-    btnComparar: document.getElementById('btnComparar'),
     actionCenter: document.getElementById('actionCenter'),
-    bancoTitle: document.getElementById('bancoTitle'),
-    orcamentoTitle: document.getElementById('orcamentoTitle'),
+    bancoTitle: document.querySelector('.panel-title--banco'),
+    orcamentoTitle: document.querySelector('.panel-title--orcamento'),
+    btnComparar: document.getElementById('btnComparar'),
     btnExportarDiscrepBanco: document.getElementById('btnExportarDiscrepBanco'),
     btnExportarDiscrepOrcamento: document.getElementById('btnExportarDiscrepOrcamento'),
     summaryPanel: document.getElementById('summaryPanel'),
@@ -742,6 +776,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   DOM.btnNovaConciliacao.addEventListener('click', resetApplication);
+  
   DOM.btnProcessarTexto.addEventListener('click', () => {
     const texto = DOM.textoBanco.value;
     if (!texto.trim()) { showToast("Cole o extrato bruto antes de processar.", 'error'); return; }
