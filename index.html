@@ -21,9 +21,13 @@
 </header>
 
 <main>
+  <div id="actionCenter" class="action-center top-fixed hidden">
+    <button id="btnComparar">Comparar</button>
+  </div>
+
   <section class="container">
     <div class="panel">
-      <h2 class="panel-title panel-title--banco">Dados do Banco</h2>
+      <h2 id="bancoTitle" class="panel-title panel-title--banco">Dados do Banco<span class="status-icon">✓</span></h2>
       <input type="file" id="fileBanco" accept=".csv,.xlsx,.xls">
       <h3>Ou colar extrato bruto</h3>
       <textarea id="textoBanco" placeholder="Cole aqui o texto copiado do Internet Banking. Ex: fatura do cartão de crédito."></textarea>
@@ -47,15 +51,11 @@
     </div>
 
     <div class="panel">
-      <h2 class="panel-title panel-title--orcamento">Dados do Orçamento</h2>
+      <h2 id="orcamentoTitle" class="panel-title panel-title--orcamento">Dados do Orçamento<span class="status-icon">✓</span></h2>
       <input type="file" id="fileOrcamento" accept=".csv,.xlsx,.xls">
       <table id="previewOrcamento"></table>
     </div>
   </section>
-
-  <div class="action-center">
-    <button id="btnComparar">Comparar</button>
-  </div>
 
   <section id="logPanel" class="discrepancy-section hidden">
     <h2>📝 Log de Ações da Conciliação</h2>
