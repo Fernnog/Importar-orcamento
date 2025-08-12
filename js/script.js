@@ -10,6 +10,11 @@ const appState = {
   possibleMatches: [],
 };
 
+// --- ESTADO DA INTERFACE (ORDENAÇÃO E FILTRO) ---
+let sortState = {}; // Ex: { previewBanco: { key: 'valor', dir: 'asc' } }
+let filterState = {}; // Ex: { tabelaBanco: 'mercado' }
+
+
 // --- ELEMENTOS DO DOM (CACHE PARA PERFORMANCE) ---
 const DOM = {};
 
@@ -169,16 +174,110 @@ function encontrarPossiveisMatches(bancoRest, orcRest) {
   return possible;
 }
 
+// --- INÍCIO: NOVAS FUNÇÕES DE ORDENAÇÃO E FILTRAGEM ---
+
+function debounce(func, delay = 300) {
+    let timeoutId;
+    return (...args) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+            func.apply(this, args);
+        }, delay);
+    };
+}
+
+function handleSort(e) {
+    const header = e.target.closest('.sortable-header');
+    if (!header) return;
+
+    const tableId = header.dataset.tableId;
+    const sortKey = header.dataset.sortKey;
+    const dataType = header.dataset.dataType || 'string';
+
+    if (!tableId || !sortKey) return;
+
+    const currentDir = sortState[tableId]?.key === sortKey ? sortState[tableId].dir : 'none';
+    const newDir = currentDir === 'asc' ? 'desc' : 'asc';
+    
+    sortState[tableId] = { key: sortKey, dir: newDir, dataType };
+
+    // Dispara a re-renderização da tabela correta
+    rerenderTable(tableId);
+}
+
+function handleFilter(e) {
+    const input = e.target;
+    if (!input.classList.contains('table-filter-input')) return;
+    
+    const tableId = input.dataset.tableId;
+    filterState[tableId] = input.value;
+    
+    rerenderTable(tableId);
+}
+
+const debouncedHandleFilter = debounce(handleFilter, 300);
+
+function rerenderTable(tableId) {
+    const renderMap = {
+        'previewBanco':       () => mostrarTabelaBanco(appState.dadosBanco, tableId),
+        'previewOrcamento':   () => mostrarTabela(appState.dadosOrcamento, tableId, 'Nenhum orçamento importado.'),
+        'tabelaBanco':        () => mostrarTabela(appState.discrepBanco, tableId, 'Nenhuma discrepância encontrada.'),
+        'tabelaOrcamento':    () => mostrarTabela(appState.discrepOrc, tableId, 'Nenhuma discrepância encontrada.'),
+        'possibleMatchesTbl': () => renderPossibleMatches()
+    };
+
+    if (renderMap[tableId]) {
+        renderMap[tableId]();
+    }
+}
+
+// --- FIM: NOVAS FUNÇÕES DE ORDENAÇÃO E FILTRAGEM ---
+
+
 function renderPossibleMatches() {
-    const matches = appState.possibleMatches;
+    let matches = [...appState.possibleMatches]; // Copia para não modificar o original
+
+    // 1. APLICAR FILTRO
+    const tableId = 'possibleMatchesTbl';
+    const filterTerm = (filterState[tableId] || '').toLowerCase();
+    if (filterTerm) {
+        matches = matches.filter(match => 
+            match.bancoItem.descricao.toLowerCase().includes(filterTerm) ||
+            match.orcItem.descricao.toLowerCase().includes(filterTerm)
+        );
+    }
+    
+    // 2. APLICAR ORDENAÇÃO
+    const sortInfo = sortState[tableId];
+    if (sortInfo) {
+        const { key, dir, dataType = 'string' } = sortInfo;
+        matches.sort((a, b) => {
+            const valA = key === 'score' ? a[key] : a.bancoItem[key];
+            const valB = key === 'score' ? b[key] : b.bancoItem[key];
+            let comparison = 0;
+            if (dataType === 'number') {
+                comparison = valA - valB;
+            } else {
+                comparison = String(valA).localeCompare(String(valB), 'pt-BR', { sensitivity: 'base' });
+            }
+            return dir === 'asc' ? comparison : -comparison;
+        });
+    }
+
     const tbl = DOM.possibleMatchesTbl;
     tbl.innerHTML = `<thead><tr>
-        <th>Banco (Descrição)</th>
-        <th>Orçamento (Descrição)</th>
-        <th>Valor (R$)</th>
-        <th>Confiança</th>
+        <th class="sortable-header" data-table-id="possibleMatchesTbl" data-sort-key="descricao">Banco (Descrição)</th>
+        <th class="sortable-header" data-table-id="possibleMatchesTbl" data-sort-key="descricao">Orçamento (Descrição)</th>
+        <th class="sortable-header" data-table-id="possibleMatchesTbl" data-sort-key="valor" data-data-type="number">Valor (R$)</th>
+        <th class="sortable-header" data-table-id="possibleMatchesTbl" data-sort-key="score" data-data-type="number">Confiança</th>
         <th>Ação</th>
     </tr></thead>`;
+    
+    if (sortInfo) {
+        const th = tbl.querySelector(`th[data-sort-key="${sortInfo.key}"]`);
+        if(th) th.setAttribute('data-sort-dir', sortInfo.dir);
+    }
+
     const tbody = document.createElement('tbody');
 
     if (!matches.length) {
@@ -187,10 +286,11 @@ function renderPossibleMatches() {
     }
 
     DOM.possibleMatchesPanel.classList.remove('hidden');
-    matches.forEach((match, index) => {
+    matches.forEach(match => {
+        const originalIndex = appState.possibleMatches.indexOf(match);
         const tr = tbody.insertRow();
         tr.className = 'possible-match-row';
-        tr.dataset.matchIndex = index;
+        tr.dataset.matchIndex = originalIndex;
         tr.draggable = true; 
 
         tr.addEventListener('dragstart', handleDragStart);
@@ -417,6 +517,12 @@ function resetApplication() {
     dadosBanco: [], dadosOrcamento: [], dadosBancoOriginais: [],
     discrepBanco: [], discrepOrc: [], possibleMatches: []
   });
+  
+  // Limpa os estados de UI
+  sortState = {};
+  filterState = {};
+  document.querySelectorAll('.table-filter-input').forEach(input => input.value = '');
+
   DOM.textoBanco.value = '';
   DOM.fileBanco.value = '';
   DOM.fileOrcamento.value = '';
@@ -453,6 +559,7 @@ function loadXLSXLibrary() {
 }
 
 function parseDate(dateString) {
+    if (!dateString) return new Date(0); // Data inválida para ficar no final
     const [day, month, year] = dateString.split('/');
     return new Date(year, month - 1, day);
 }
@@ -556,13 +663,39 @@ function processarDadosOrcamento(linhas) {
 
 // --- RENDERIZAÇÃO E EXPORTAÇÃO ---
 function mostrarTabelaBanco(dados, id) {
+  let dadosParaRenderizar = [...dados];
+
+  const sortInfo = sortState[id];
+  if (sortInfo) {
+      const { key, dir, dataType = 'string' } = sortInfo;
+      dadosParaRenderizar.sort((a, b) => {
+          const valA = a[key];
+          const valB = b[key];
+          let comparison = 0;
+          if (dataType === 'number') comparison = valA - valB;
+          else if (dataType === 'date') comparison = parseDate(valA) - parseDate(valB);
+          else comparison = String(valA).localeCompare(String(valB), 'pt-BR');
+          return dir === 'asc' ? comparison : -comparison;
+      });
+  }
+
   const tbl = document.getElementById(id);
-  tbl.innerHTML = '<thead><tr><th>Data</th><th>Descrição</th><th>Valor (R$)</th></tr></thead>';
+  tbl.innerHTML = `<thead><tr>
+    <th class="sortable-header" data-table-id="${id}" data-sort-key="data" data-data-type="date">Data</th>
+    <th class="sortable-header" data-table-id="${id}" data-sort-key="descricao">Descrição</th>
+    <th class="sortable-header" data-table-id="${id}" data-sort-key="valor" data-data-type="number">Valor (R$)</th>
+  </tr></thead>`;
+  
+  if (sortInfo) {
+      const th = tbl.querySelector(`th[data-sort-key="${sortInfo.key}"]`);
+      if(th) th.setAttribute('data-sort-dir', sortInfo.dir);
+  }
+
   const tbody = document.createElement('tbody');
-  if (!dados || !dados.length) {
+  if (!dadosParaRenderizar || !dadosParaRenderizar.length) {
     tbody.innerHTML = `<tr><td colspan="3" class="no-results">${DOM.textoBanco.value.trim() ? 'Nenhum lançamento válido.' : 'Aguardando dados...'}</td></tr>`;
   } else {
-    dados.forEach(l => {
+    dadosParaRenderizar.forEach(l => {
       const row = tbody.insertRow();
       row.insertCell().innerText = l.data; 
       const descCell = row.insertCell();
@@ -577,19 +710,56 @@ function mostrarTabelaBanco(dados, id) {
 }
 
 function mostrarTabela(dados, id, noResultsMessage = 'Nenhum dado encontrado.') {
+    let dadosParaRenderizar = [...dados];
+
+    // 1. APLICAR FILTRO
+    const filterTerm = (filterState[id] || '').toLowerCase();
+    if (filterTerm) {
+        dadosParaRenderizar = dadosParaRenderizar.filter(item => 
+            item.descricao.toLowerCase().includes(filterTerm)
+        );
+        noResultsMessage = 'Nenhum resultado para o filtro aplicado.';
+    }
+
+    // 2. APLICAR ORDENAÇÃO
+    const sortInfo = sortState[id];
+    if (sortInfo) {
+        const { key, dir, dataType = 'string' } = sortInfo;
+        dadosParaRenderizar.sort((a, b) => {
+            const valA = a[key];
+            const valB = b[key];
+            let comparison = 0;
+            if (dataType === 'number') comparison = valA - valB;
+            else comparison = String(valA).localeCompare(String(valB), 'pt-BR');
+            return dir === 'asc' ? comparison : -comparison;
+        });
+    }
+
   const tbl = document.getElementById(id);
   const isDiscrepancyTable = id.startsWith('tabela');
   const header = isDiscrepancyTable
-      ? '<thead><tr><th>Descrição</th><th>Valor (R$)</th><th class="col-action" title="Excluir">X</th></tr></thead>'
-      : '<thead><tr><th>Descrição</th><th>Valor (R$)</th></tr></thead>';
+      ? `<thead><tr>
+            <th class="sortable-header" data-table-id="${id}" data-sort-key="descricao">Descrição</th>
+            <th class="sortable-header" data-table-id="${id}" data-sort-key="valor" data-data-type="number">Valor (R$)</th>
+            <th class="col-action" title="Excluir">X</th>
+         </tr></thead>`
+      : `<thead><tr>
+            <th class="sortable-header" data-table-id="${id}" data-sort-key="descricao">Descrição</th>
+            <th class="sortable-header" data-table-id="${id}" data-sort-key="valor" data-data-type="number">Valor (R$)</th>
+         </tr></thead>`;
   tbl.innerHTML = header;
+  
+  if (sortInfo) {
+      const th = tbl.querySelector(`th[data-sort-key="${sortInfo.key}"]`);
+      if(th) th.setAttribute('data-sort-dir', sortInfo.dir);
+  }
 
   const tbody = document.createElement('tbody');
-  if (!dados || !dados.length) {
+  if (!dadosParaRenderizar || !dadosParaRenderizar.length) {
     const colspan = isDiscrepancyTable ? 3 : 2;
     tbody.innerHTML = `<tr><td colspan="${colspan}" class="no-results">${noResultsMessage}</td></tr>`;
   } else {
-    dados.forEach(l => {
+    dadosParaRenderizar.forEach(l => {
       const row = tbody.insertRow();
       const descCell = row.insertCell();
       descCell.innerText = l.descricao;
@@ -774,6 +944,11 @@ document.addEventListener('DOMContentLoaded', () => {
       target.addEventListener('dragleave', handleDragLeave);
       target.addEventListener('drop', handleDrop);
   });
+  
+  // Adiciona listeners para ordenação e filtragem via delegação de eventos
+  const mainElement = document.querySelector('main');
+  mainElement.addEventListener('click', handleSort);
+  mainElement.addEventListener('input', debouncedHandleFilter);
 
   DOM.btnNovaConciliacao.addEventListener('click', resetApplication);
   
