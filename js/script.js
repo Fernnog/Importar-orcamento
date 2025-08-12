@@ -270,59 +270,35 @@ function openCreateRuleModal(match) {
 const criarChaveItem = item => `${normalizeText(item.descricao)}_${(Math.round(item.valor*100)/100).toFixed(2)}`;
 const criarChaveParcialItem = item => `${normalizeText(item.descricao).substring(0,8)}_${(Math.round(item.valor*100)/100).toFixed(2)}`;
 
+function renderLog(logEntries) {
+    if (!logEntries || logEntries.length === 0) {
+        DOM.logPanel.classList.add('hidden');
+        return;
+    }
+    DOM.logList.innerHTML = logEntries.map(entry => `<li>${entry}</li>`).join('');
+    DOM.logPanel.classList.remove('hidden');
+    DOM.logList.classList.remove('no-results');
+}
+
 function comparar() {
   if (!appState.dadosBanco.length || !appState.dadosOrcamento.length) {
     showToast("Importe os dados do banco e do orçamento antes de comparar.", 'error');
     return;
   }
   
-  // PASSO 0: Aplicar regras salvas
+  let logEntries = [];
+  
+  // PASSO 0: Aplicar regras salvas usando o motor de regras
   const { regras } = getRulesObject();
   let bancoRestante = [...appState.dadosBanco];
   let orcRestante = [...appState.dadosOrcamento];
-  let bancoConciliados = new Set();
-  let orcamentoConciliados = new Set();
 
-  if (regras.length > 0) {
-      const orcMap = new Map();
-      orcRestante.forEach(o => {
-          if (!orcMap.has(o.descricao)) orcMap.set(o.descricao, []);
-          orcMap.get(o.descricao).push(o);
-      });
-
-      regras.forEach(rule => {
-          if (rule.type === 'smart') {
-              bancoRestante.forEach(bancoItem => {
-                  if (bancoItem.descricao.startsWith(rule.banco)) {
-                      orcRestante.forEach(orcItem => {
-                          if (orcItem.descricao.startsWith(rule.orc) && Math.round(bancoItem.valor * 100) === Math.round(orcItem.valor * 100)) {
-                              if (!bancoConciliados.has(bancoItem) && !orcamentoConciliados.has(orcItem)) {
-                                  bancoConciliados.add(bancoItem);
-                                  orcamentoConciliados.add(orcItem);
-                              }
-                          }
-                      });
-                  }
-              });
-          } else { // Regra 'exact'
-              const orcCandidates = orcMap.get(rule.orc) || [];
-              bancoRestante.forEach(bancoItem => {
-                  if (bancoItem.descricao === rule.banco) {
-                      const valorBanco = Math.round(bancoItem.valor * 100);
-                      const orcItemIndex = orcCandidates.findIndex(o => Math.round(o.valor * 100) === valorBanco && !orcamentoConciliados.has(o));
-                      if (orcItemIndex > -1) {
-                          if (!bancoConciliados.has(bancoItem)) {
-                              bancoConciliados.add(bancoItem);
-                              orcamentoConciliados.add(orcCandidates[orcItemIndex]);
-                          }
-                      }
-                  }
-              });
-          }
-      });
-      if (bancoConciliados.size > 0) {
-        showToast(`${bancoConciliados.size} itens conciliados por regras automáticas.`, 'info');
-      }
+  const { bancoConciliados, orcamentoConciliados } = aplicarRegrasDeConciliacao(bancoRestante, orcRestante, regras);
+      
+  if (bancoConciliados.size > 0) {
+    const msg = `✅ ${bancoConciliados.size} itens conciliados por regras automáticas.`;
+    logEntries.push(msg);
+    showToast(msg, 'info');
   }
 
   bancoRestante = appState.dadosBanco.filter(i => !bancoConciliados.has(i));
@@ -339,6 +315,10 @@ function comparar() {
       bancoConciliadosExatos.add(bancoItem);
     }
   });
+  
+  if (bancoConciliadosExatos.size > 0) {
+      logEntries.push(`✅ ${bancoConciliadosExatos.size} itens conciliados por correspondência exata.`);
+  }
 
   const chavesBancoConciliadasExatas = new Set(Array.from(bancoConciliadosExatos).map(criarChaveItem));
   const orcamentoConciliadosExatos = new Set(orcRestante.filter(item => {
@@ -351,16 +331,18 @@ function comparar() {
       return false;
   }));
   
-  bancoConciliados = new Set([...bancoConciliados, ...bancoConciliadosExatos]);
-  orcamentoConciliados = new Set([...orcamentoConciliados, ...orcamentoConciliadosExatos]);
+  const todosBancoConciliados = new Set([...bancoConciliados, ...bancoConciliadosExatos]);
+  const todosOrcamentoConciliados = new Set([...orcamentoConciliados, ...orcamentoConciliadosExatos]);
 
-  bancoRestante = appState.dadosBanco.filter(item => !bancoConciliados.has(item));
-  orcRestante = appState.dadosOrcamento.filter(item => !orcamentoConciliados.has(item));
+  bancoRestante = appState.dadosBanco.filter(item => !todosBancoConciliados.has(item));
+  orcRestante = appState.dadosOrcamento.filter(item => !todosOrcamentoConciliados.has(item));
 
   // PASSO 2: Encontrar e APRESENTAR possíveis matches
   if (!appState.possibleMatches.length) {
       appState.possibleMatches = encontrarPossiveisMatches(bancoRestante, orcRestante);
   }
+
+  renderLog(logEntries);
 
   if (appState.possibleMatches.length > 0) {
       renderPossibleMatches();
@@ -444,6 +426,8 @@ function resetApplication() {
   DOM.painelRefinamento.classList.add('hidden');
   DOM.summaryPanel.classList.add('hidden');
   DOM.possibleMatchesPanel.classList.add('hidden');
+  DOM.logPanel.classList.add('hidden');
+  DOM.logList.innerHTML = '';
   window.Paginador.reset();
   showToast('Sessão limpa. Pronto para uma nova análise!', 'success');
 }
@@ -728,6 +712,8 @@ document.addEventListener('DOMContentLoaded', () => {
     modalCopia: document.getElementById('modalCopia'),
     infoCopiaContainer: document.getElementById('info-copia-container'),
     btnCopiarInfo: document.getElementById('btnCopiarInfo'),
+    logPanel: document.getElementById('logPanel'),
+    logList: document.getElementById('logList'),
   });
 
   const dropTargets = document.querySelectorAll('.summary-panel .metric-item');
