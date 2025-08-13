@@ -83,12 +83,10 @@
   <section id="possibleMatchesPanel" class="discrepancy-section hidden" aria-live="polite" aria-atomic="true">
     <h2>Possíveis Coincidências (Arraste para uma das caixas acima)</h2>
 
-    <!-- INÍCIO: BLOCO DE FILTRO ADICIONADO -->
     <div class="table-filter-container">
         <label for="filterPossibleMatches">🔍 Filtrar por descrição:</label>
         <input type="text" id="filterPossibleMatches" class="table-filter-input" data-table-id="possibleMatchesTbl" placeholder="Ex: Uber">
     </div>
-    <!-- FIM: BLOCO DE FILTRO ADICIONADO -->
 
     <div class="refinement-panel" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
       <button id="btnAutoMatchHighConfidence" class="btn-export" title="Concilia automaticamente sugestões com confiança acima de 80%">✓ Conciliar Sugestões de Alta Confiança</button>
@@ -102,12 +100,10 @@
   <section class="discrepancy-section">
     <h2>Discrepâncias - Banco</h2>
 
-    <!-- INÍCIO: BLOCO DE FILTRO ADICIONADO -->
     <div class="table-filter-container">
         <label for="filterDiscrepBanco">🔍 Filtrar por descrição:</label>
         <input type="text" id="filterDiscrepBanco" class="table-filter-input" data-table-id="tabelaBanco" placeholder="Ex: Lanche">
     </div>
-    <!-- FIM: BLOCO DE FILTRO ADICIONADO -->
     
     <button id="btnExportarDiscrepBanco" class="btn-export">Exportar CSV</button>
     <table id="tabelaBanco"></table>
@@ -116,12 +112,10 @@
   <section class="discrepancy-section">
     <h2>Discrepâncias - Orçamento</h2>
 
-    <!-- INÍCIO: BLOCO DE FILTRO ADICIONADO -->
     <div class="table-filter-container">
         <label for="filterDiscrepOrc">🔍 Filtrar por descrição:</label>
         <input type="text" id="filterDiscrepOrc" class="table-filter-input" data-table-id="tabelaOrcamento" placeholder="Ex: Mercado">
     </div>
-    <!-- FIM: BLOCO DE FILTRO ADICIONADO -->
     
     <button id="btnExportarDiscrepOrcamento" class="btn-export">Exportar CSV</button>
     <table id="tabelaOrcamento"></table>
@@ -208,8 +202,7 @@
   <div class="spinner"></div>
 </div>
 
-<script src="js/paginador.js" defer></script>
-<script src="js/motor-regras.js" defer></script>
-<script src="js/script.js" defer></script>
+<script src="js/script.js" type="module" defer></script>
+
 </body>
 </html>
