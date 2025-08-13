@@ -1,317 +1,389 @@
-// js/script.js (Orquestrador)
+// js/ui-handler.js
+import { appState, sortState, filterState } from './state-manager.js';
+import { parseDate, loadXLSXLibrary } from './utils.js';
+import { criarChaveItem } from './data-processor.js';
 
-import * as State from './state-manager.js';
-import * as UI from './ui-handler.js';
-import * as Data from './data-processor.js';
-import Paginador from './paginador.js';
-import { debounce } from './utils.js';
+// O objeto DOM agora é preenchido imediatamente quando o módulo é carregado.
+// Isso é seguro porque o script principal tem o atributo 'defer', garantindo
+// que o HTML foi completamente parseado antes da execução do script.
+export const DOM = {
+    toastContainer: document.getElementById('toastContainer'),
+    spinnerOverlay: document.getElementById('spinnerOverlay'),
+    textoBanco: document.getElementById('textoBanco'),
+    fileBanco: document.getElementById('fileBanco'),
+    filtroDataInicio: document.getElementById('filtroDataInicio'),
+    novaDataLancamento: document.getElementById('novaDataLancamento'),
+    painelRefinamento: document.getElementById('painelRefinamento'),
+    fileOrcamento: document.getElementById('fileOrcamento'),
+    previewBanco: document.getElementById('previewBanco'),
+    previewOrcamento: document.getElementById('previewOrcamento'),
+    tabelaBanco: document.getElementById('tabelaBanco'),
+    tabelaOrcamento: document.getElementById('tabelaOrcamento'),
+    btnNovaConciliacao: document.getElementById('btnNovaConciliacao'),
+    btnGerenciarRegras: document.getElementById('btnGerenciarRegras'),
+    btnProcessarTexto: document.getElementById('btnProcessarTexto'),
+    btnRefinarDados: document.getElementById('btnRefinarDados'),
+    btnExportarPlanilha: document.getElementById('btnExportarPlanilha'),
+    actionCenter: document.getElementById('actionCenter'),
+    bancoTitle: document.querySelector('.panel-title--banco'),
+    orcamentoTitle: document.querySelector('.panel-title--orcamento'),
+    btnComparar: document.getElementById('btnComparar'),
+    btnExportarDiscrepBanco: document.getElementById('btnExportarDiscrepBanco'),
+    btnExportarDiscrepOrcamento: document.getElementById('btnExportarDiscrepOrcamento'),
+    summaryPanel: document.getElementById('summaryPanel'),
+    summaryReconciled: document.getElementById('summaryReconciled'),
+    summaryBank: document.getElementById('summaryBank'),
+    summaryBudget: document.getElementById('summaryBudget'),
+    possibleMatchesPanel: document.getElementById('possibleMatchesPanel'),
+    possibleMatchesTbl: document.getElementById('possibleMatchesTbl'),
+    btnAutoMatchHighConfidence: document.getElementById('btnAutoMatchHighConfidence'),
+    btnIgnoreAllPossible: document.getElementById('btnIgnoreAllPossible'),
+    regrasModal: document.getElementById('regrasModal'),
+    listaRegras: document.getElementById('listaRegras'),
+    regrasModalPlaceholder: document.getElementById('regrasModalPlaceholder'),
+    btnExportarRegras: document.getElementById('btnExportarRegras'),
+    btnImportarRegras: document.getElementById('btnImportarRegras'),
+    importFile: document.getElementById('importFile'),
+    infoVersaoRegras: document.getElementById('infoVersaoRegras'),
+    timestampRegras: document.getElementById('timestampRegras'),
+    createRuleModal: document.getElementById('createRuleModal'),
+    btnConfirmarSalvarRegra: document.getElementById('btnConfirmarSalvarRegra'),
+    smartRulePreview: document.getElementById('smart-rule-preview'),
+    ruleTypeExact: document.getElementById('rule-type-exact'),
+    modalCopia: document.getElementById('modalCopia'),
+    infoCopiaContainer: document.getElementById('info-copia-container'),
+    btnCopiarInfo: document.getElementById('btnCopiarInfo'),
+    logPanel: document.getElementById('logPanel'),
+    logList: document.getElementById('logList'),
+};
 
-// --- FUNÇÕES DE ORQUESTRAÇÃO ---
+// A função initDOM foi removida.
 
-function resetApplication() {
-  State.resetAppState();
-  UI.resetUI();
-  document.querySelectorAll('.table-filter-input').forEach(input => input.value = '');
-  Paginador.reset();
-  UI.showToast('Sessão limpa. Pronto para uma nova análise!', 'success');
+// --- O restante das funções exportadas permanecem EXATAMENTE as mesmas ---
+// (showSpinner, hideSpinner, showToast, animateCounter, mostrarTabela, etc.)
+
+export const showSpinner = () => DOM.spinnerOverlay.classList.remove('hidden');
+export const hideSpinner = () => DOM.spinnerOverlay.classList.add('hidden');
+
+export function showToast(message, type = 'info') {
+  DOM.toastContainer.insertAdjacentHTML('beforeend', `<div class="toast ${type}">${message}</div>`);
+  const toast = DOM.toastContainer.lastElementChild;
+  setTimeout(() => toast.remove(), 5000);
 }
 
-function handleComparar() {
-    if (!State.appState.dadosBanco.length || !State.appState.dadosOrcamento.length) {
-        UI.showToast("Importe os dados do banco e do orçamento antes de comparar.", 'error');
-        return;
+export function animateCounter(element, start, end, duration) {
+    let startTime = null;
+    const step = (currentTime) => {
+        if (!startTime) startTime = currentTime;
+        const progress = Math.min((currentTime - startTime) / duration, 1);
+        element.innerText = Math.floor(progress * (end - start) + start);
+        if (progress < 1) {
+            window.requestAnimationFrame(step);
+        } else {
+            element.innerText = end;
+        }
+    };
+    window.requestAnimationFrame(step);
+}
+
+export function updateCompareButtonVisibility() {
+  const hasBankData = appState.dadosBanco.length > 0;
+  const hasBudgetData = appState.dadosOrcamento.length > 0;
+
+  if (hasBankData && hasBudgetData) {
+    if (DOM.actionCenter.classList.contains('hidden')) {
+      DOM.actionCenter.classList.remove('hidden');
+      showToast("Pronto! Dados carregados. Clique em 'Comparar' para iniciar a análise.", 'warning');
     }
-
-    const { logEntries } = Data.comparar();
-    UI.renderLog(logEntries);
-
-    // Atualiza as tabelas e painéis com base no novo estado
-    if (State.appState.possibleMatches.length > 0) {
-        UI.renderPossibleMatches();
-        UI.showToast(`Encontramos ${State.appState.possibleMatches.length} possíveis conciliações.`, 'info');
-        UI.mostrarTabela([], 'tabelaBanco', 'Revise as possíveis coincidências acima.');
-        UI.mostrarTabela([], 'tabelaOrcamento', 'Revise as possíveis coincidências acima.');
-    } else {
-        UI.DOM.possibleMatchesPanel.classList.add('hidden');
-        UI.mostrarTabela(State.appState.discrepBanco, 'tabelaBanco', 'Nenhuma discrepância encontrada.');
-        UI.mostrarTabela(State.appState.discrepOrc, 'tabelaOrcamento', 'Nenhuma discrepância encontrada.');
-        UI.showToast('Comparação concluída!', 'success');
-    }
-    
-    // Anima os contadores do resumo
-    const reconciledCount = State.appState.dadosBancoOriginais.length - State.appState.dadosBanco.length;
-    UI.animateCounter(UI.DOM.summaryReconciled, 0, reconciledCount, 750);
-    UI.animateCounter(UI.DOM.summaryBank, 0, State.appState.discrepBanco.length, 750);
-    UI.animateCounter(UI.DOM.summaryBudget, 0, State.appState.discrepOrc.length, 750);
-
-    UI.DOM.summaryPanel.classList.remove('hidden');
-    Paginador.updateState({ resumo: true });
-}
-
-function reanalisarAposMudanca() {
-    UI.showSpinner();
-    State.appState.possibleMatches = []; // Força reavaliação de sugestões
-    handleComparar();
-    UI.hideSpinner();
-}
-
-// --- HANDLERS DE EVENTOS DE ALTO NÍVEL ---
-
-function handleProcessarTexto() {
-  const texto = UI.DOM.textoBanco.value;
-  if (!texto.trim()) {
-    UI.showToast("Cole o extrato bruto antes de processar.", 'error');
-    return;
-  }
-  UI.showSpinner();
-  const dadosProcessados = Data.importarTextoBrutoInteligente(texto);
-  State.appState.dadosBancoOriginais = [...dadosProcessados];
-  State.appState.dadosBanco = [...dadosProcessados];
-  UI.mostrarTabelaBanco(State.appState.dadosBanco, 'previewBanco');
-  UI.hideSpinner();
-
-  if (State.appState.dadosBanco.length > 0) {
-    UI.DOM.painelRefinamento.classList.remove('hidden');
-    UI.showToast(`${State.appState.dadosBanco.length} lançamentos encontrados.`, 'info');
-    UI.DOM.bancoTitle.classList.add('completed');
-    Paginador.updateState({ banco: true });
-    UI.updateCompareButtonVisibility();
   } else {
-    UI.showToast('Nenhum lançamento válido encontrado. Verifique o formato.', 'error');
+    DOM.actionCenter.classList.add('hidden');
   }
 }
 
-function handleSort(e) {
-    const header = e.target.closest('.sortable-header');
-    if (!header) return;
-
-    const tableId = header.dataset.tableId;
-    const sortKey = header.dataset.sortKey;
-    const dataType = header.dataset.dataType || 'string';
-    if (!tableId || !sortKey) return;
-
-    const currentDir = State.sortState[tableId]?.key === sortKey ? State.sortState[tableId].dir : 'none';
-    const newDir = currentDir === 'asc' ? 'desc' : 'asc';
-    State.sortState[tableId] = { key: sortKey, dir: newDir, dataType };
-
-    const renderMap = {
-        'previewBanco': () => UI.mostrarTabelaBanco(State.appState.dadosBanco, 'previewBanco'),
-        'previewOrcamento': () => UI.mostrarTabela(State.appState.dadosOrcamento, 'previewOrcamento', 'Nenhum orçamento importado.'),
-        'tabelaBanco': () => UI.mostrarTabela(State.appState.discrepBanco, 'tabelaBanco', 'Nenhuma discrepância encontrada.'),
-        'tabelaOrcamento': () => UI.mostrarTabela(State.appState.discrepOrc, 'tabelaOrcamento', 'Nenhuma discrepância encontrada.'),
-        'possibleMatchesTbl': () => UI.renderPossibleMatches()
-    };
-    if (renderMap[tableId]) renderMap[tableId]();
-}
-
-const debouncedFilter = debounce((e) => {
-    const input = e.target;
-    if (!input.classList.contains('table-filter-input')) return;
-    
-    const tableId = input.dataset.tableId;
-    State.filterState[tableId] = input.value;
-    
-    const renderMap = {
-        'tabelaBanco': () => UI.mostrarTabela(State.appState.discrepBanco, 'tabelaBanco', 'Nenhuma discrepância encontrada.'),
-        'tabelaOrcamento': () => UI.mostrarTabela(State.appState.discrepOrc, 'tabelaOrcamento', 'Nenhuma discrepância encontrada.'),
-        'possibleMatchesTbl': () => UI.renderPossibleMatches()
-    };
-    if (renderMap[tableId]) renderMap[tableId]();
-}, 300);
-
-function openCreateRuleModal(match) {
-    const bancoPattern = Data.extractPattern(match.bancoItem.descricao);
-    const orcPattern = Data.extractPattern(match.orcItem.descricao);
-
-    UI.DOM.createRuleModal.dataset.bancoDesc = match.bancoItem.descricao;
-    UI.DOM.createRuleModal.dataset.orcDesc = match.orcItem.descricao;
-    UI.DOM.createRuleModal.dataset.bancoPattern = bancoPattern;
-    UI.DOM.createRuleModal.dataset.orcPattern = orcPattern;
-    UI.DOM.createRuleModal.dataset.matchIndex = State.appState.possibleMatches.indexOf(match);
-
-    UI.DOM.smartRulePreview.textContent = `Irá associar itens que comecem com "${bancoPattern}" (banco) a itens que comecem com "${orcPattern}" (orçamento).`;
-    
-    UI.DOM.ruleTypeExact.checked = true;
-    UI.DOM.createRuleModal.classList.remove('hidden');
-}
-
-function handleMatchAction(e) {
-    const button = e.target.closest('button');
-    if (!button) return;
-
-    const tr = button.closest('tr');
-    if (!tr || typeof tr.dataset.matchIndex === 'undefined') return;
-    
-    const matchIndex = parseInt(tr.dataset.matchIndex, 10);
-    const match = State.appState.possibleMatches[matchIndex];
-    if (!match) return;
-
-    if (button.classList.contains('btn-save-rule')) {
-        openCreateRuleModal(match);
-        return;
+export function mostrarTabelaBanco(dados, id) {
+    // ... (código da função original sem alterações)
+    let dadosParaRenderizar = [...dados];
+    const sortInfo = sortState[id];
+    if (sortInfo) {
+        const { key, dir, dataType = 'string' } = sortInfo;
+        dadosParaRenderizar.sort((a, b) => {
+            const valA = a[key];
+            const valB = b[key];
+            let comparison = 0;
+            if (dataType === 'number') comparison = valA - valB;
+            else if (dataType === 'date') comparison = parseDate(valA) - parseDate(valB);
+            else comparison = String(valA).localeCompare(String(valB), 'pt-BR');
+            return dir === 'asc' ? comparison : -comparison;
+        });
     }
+
+    const tbl = document.getElementById(id);
+    tbl.innerHTML = `<thead><tr>
+        <th class="sortable-header" data-table-id="${id}" data-sort-key="data" data-data-type="date">Data</th>
+        <th class="sortable-header" data-table-id="${id}" data-sort-key="descricao">Descrição</th>
+        <th class="sortable-header" data-table-id="${id}" data-sort-key="valor" data-data-type="number">Valor (R$)</th>
+    </tr></thead>`;
     
-    if (button.classList.contains('btn-accept')) {
-        State.appState.dadosBanco = State.appState.dadosBanco.filter(item => item !== match.bancoItem);
-        State.appState.dadosOrcamento = State.appState.dadosOrcamento.filter(item => item !== match.orcItem);
-        UI.showToast('Conciliação confirmada!', 'success');
-    } else if (button.classList.contains('btn-reject')) {
-        UI.showToast('Sugestão ignorada.', 'info');
+    if (sortInfo) {
+        const th = tbl.querySelector(`th[data-sort-key="${sortInfo.key}"]`);
+        if(th) th.setAttribute('data-sort-dir', sortInfo.dir);
     }
+
+    const tbody = document.createElement('tbody');
+    const noResultsMessage = DOM.textoBanco.value.trim() ? 'Nenhum lançamento válido.' : 'Aguardando dados...';
     
-    State.appState.possibleMatches.splice(matchIndex, 1);
-    handleComparar();
-}
-
-function handleDiscrepancyDeletion(e) {
-    if (e.target.tagName !== 'INPUT' || e.target.type !== 'checkbox') return;
-
-    const keyToDelete = e.target.dataset.key;
-    if (!confirm(`Tem certeza que deseja apagar TODOS os lançamentos com a chave "${keyToDelete.replace('_', ' | R$ ')}"? Esta ação é irreversível e removerá o item de todas as listas.`)) {
-        e.target.checked = false;
-        return;
-    }
-    
-    State.appState.dadosBanco = State.appState.dadosBanco.filter(item => Data.criarChaveItem(item) !== keyToDelete);
-    State.appState.dadosBancoOriginais = State.appState.dadosBancoOriginais.filter(item => Data.criarChaveItem(item) !== keyToDelete);
-    State.appState.dadosOrcamento = State.appState.dadosOrcamento.filter(item => Data.criarChaveItem(item) !== keyToDelete);
-    
-    UI.showToast('Item removido. Reanalisando...', 'info');
-    
-    UI.mostrarTabelaBanco(State.appState.dadosBanco, 'previewBanco');
-    UI.mostrarTabela(State.appState.dadosOrcamento, 'previewOrcamento', 'Orçamento importado. Pronto para comparar.');
-    reanalisarAposMudanca();
-}
-
-
-// --- INICIALIZAÇÃO E EVENT LISTENERS ---
-document.addEventListener('DOMContentLoaded', () => {
-  UI.initDOM();
-  Paginador.init();
-
-  const mainElement = document.querySelector('main');
-  
-  // --- Ações Principais ---
-  UI.DOM.btnNovaConciliacao.addEventListener('click', resetApplication);
-  UI.DOM.btnProcessarTexto.addEventListener('click', handleProcessarTexto);
-  UI.DOM.btnComparar.addEventListener('click', () => reanalisarAposMudanca());
-
-  // --- Importação / Exportação ---
-  UI.DOM.fileOrcamento.addEventListener('change', e => {
-    if (!e.target.files.length) return;
-    UI.lerArquivo(e.target.files[0], linhas => {
-      const result = Data.processarDadosOrcamento(linhas);
-      if (result.success) {
-        State.appState.dadosOrcamento = result.data;
-        UI.mostrarTabela(State.appState.dadosOrcamento, 'previewOrcamento', 'Orçamento importado.');
-        UI.showToast(`${State.appState.dadosOrcamento.length} itens importados.`, 'success');
-        UI.DOM.orcamentoTitle.classList.add('completed');
-        Paginador.updateState({ orcamento: true });
-        UI.updateCompareButtonVisibility();
-      } else {
-        UI.showToast(result.message, 'error');
-      }
-    });
-  });
-  
-  UI.DOM.btnExportarPlanilha.addEventListener('click', () => UI.exportarXLSX(State.appState.dadosBanco, 'importacao_pronta.xlsx'));
-  UI.DOM.btnExportarDiscrepBanco.addEventListener('click', () => UI.exportarCSV(State.appState.discrepBanco, 'discrepancias_banco.csv'));
-  UI.DOM.btnExportarDiscrepOrcamento.addEventListener('click', () => UI.exportarCSV(State.appState.discrepOrc, 'discrepancias_orcamento.csv'));
-
-  // --- Tabelas e Interações ---
-  mainElement.addEventListener('click', handleSort);
-  mainElement.addEventListener('input', debouncedFilter);
-
-  UI.DOM.possibleMatchesTbl.addEventListener('click', handleMatchAction);
-  UI.DOM.tabelaBanco.addEventListener('click', handleDiscrepancyDeletion);
-  UI.DOM.tabelaOrcamento.addEventListener('click', handleDiscrepancyDeletion);
-
-  UI.DOM.btnAutoMatchHighConfidence.addEventListener('click', () => {
-      const highConfidenceMatches = State.appState.possibleMatches.filter(m => m.score >= 0.8);
-      if(!highConfidenceMatches.length) { UI.showToast('Nenhuma sugestão de alta confiança para conciliar.', 'info'); return; }
-      
-      highConfidenceMatches.forEach(match => {
-          State.appState.dadosBanco = State.appState.dadosBanco.filter(item => item !== match.bancoItem);
-          State.appState.dadosOrcamento = State.appState.dadosOrcamento.filter(item => item !== match.orcItem);
-      });
-      State.appState.possibleMatches = State.appState.possibleMatches.filter(m => m.score < 0.8);
-      
-      UI.showToast(`${highConfidenceMatches.length} itens conciliados automaticamente!`, 'success');
-      handleComparar();
-  });
-  
-  UI.DOM.btnIgnoreAllPossible.addEventListener('click', () => {
-      if(!State.appState.possibleMatches.length) return;
-      const count = State.appState.possibleMatches.length;
-      State.appState.possibleMatches = []; 
-      UI.showToast(`${count} sugestões ignoradas. Serão tratadas como discrepâncias.`, 'info');
-      handleComparar();
-  });
-
-  // --- Modais de Regras ---
-  UI.DOM.btnGerenciarRegras.addEventListener('click', () => {
-    UI.DOM.regrasModal.classList.toggle('hidden');
-    // ... (Lógica de preenchimento do modal de regras continua no handler)
-  });
-
-  UI.DOM.regrasModal.addEventListener('click', (e) => {
-    // ... (Lógica de fechar e deletar regra continua no handler)
-  });
-
-  UI.DOM.btnExportarRegras.addEventListener('click', () => {
-    const result = State.exportarRegras();
-    if (result.success) {
-        UI.downloadFile(result.blob, result.nomeArquivo);
-        UI.showToast(result.message, 'success');
+    if (!dadosParaRenderizar || !dadosParaRenderizar.length) {
+        tbody.innerHTML = `<tr><td colspan="3" class="no-results">${noResultsMessage}</td></tr>`;
     } else {
-        UI.showToast(result.message, 'info');
+        dadosParaRenderizar.forEach(l => {
+            const row = tbody.insertRow();
+            row.insertCell().innerText = l.data; 
+            const descCell = row.insertCell();
+            descCell.innerText = l.descricao;
+            if (l.count > 1) {
+                descCell.innerHTML += ` <span class="count-badge banco">${l.count}x</span>`;
+            }
+            row.insertCell().innerText = l.valor.toFixed(2);
+        });
     }
-  });
+    tbl.appendChild(tbody);
+}
 
-  UI.DOM.btnImportarRegras.addEventListener('click', () => UI.DOM.importFile.click());
-  UI.DOM.importFile.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+export function mostrarTabela(dados, id, noResultsMessage = 'Nenhum dado encontrado.') {
+    // ... (código da função original sem alterações)
+    let dadosParaRenderizar = [...dados];
+    const filterTerm = (filterState[id] || '').toLowerCase();
+    if (filterTerm) {
+        dadosParaRenderizar = dadosParaRenderizar.filter(item => 
+            item.descricao.toLowerCase().includes(filterTerm)
+        );
+        noResultsMessage = 'Nenhum resultado para o filtro aplicado.';
+    }
+
+    const sortInfo = sortState[id];
+    if (sortInfo) {
+        const { key, dir, dataType = 'string' } = sortInfo;
+        dadosParaRenderizar.sort((a, b) => {
+            const valA = a[key];
+            const valB = b[key];
+            let comparison = 0;
+            if (dataType === 'number') comparison = valA - valB;
+            else comparison = String(valA).localeCompare(String(valB), 'pt-BR');
+            return dir === 'asc' ? comparison : -comparison;
+        });
+    }
+
+    const tbl = document.getElementById(id);
+    const isDiscrepancyTable = id.startsWith('tabela');
+    const header = isDiscrepancyTable
+        ? `<thead><tr>
+            <th class="sortable-header" data-table-id="${id}" data-sort-key="descricao">Descrição</th>
+            <th class="sortable-header" data-table-id="${id}" data-sort-key="valor" data-data-type="number">Valor (R$)</th>
+            <th class="col-action" title="Excluir">X</th>
+           </tr></thead>`
+        : `<thead><tr>
+            <th class="sortable-header" data-table-id="${id}" data-sort-key="descricao">Descrição</th>
+            <th class="sortable-header" data-table-id="${id}" data-sort-key="valor" data-data-type="number">Valor (R$)</th>
+           </tr></thead>`;
+    tbl.innerHTML = header;
+    
+    if (sortInfo) {
+        const th = tbl.querySelector(`th[data-sort-key="${sortInfo.key}"]`);
+        if(th) th.setAttribute('data-sort-dir', sortInfo.dir);
+    }
+
+    const tbody = document.createElement('tbody');
+    if (!dadosParaRenderizar || !dadosParaRenderizar.length) {
+        const colspan = isDiscrepancyTable ? 3 : 2;
+        tbody.innerHTML = `<tr><td colspan="${colspan}" class="no-results">${noResultsMessage}</td></tr>`;
+    } else {
+        dadosParaRenderizar.forEach(l => {
+            const row = tbody.insertRow();
+            const descCell = row.insertCell();
+            descCell.innerText = l.descricao;
+            if (l.count > 1) {
+                const badgeType = id.includes('Banco') || id.includes('banco') ? 'banco' : 'orcamento';
+                descCell.innerHTML += ` <span class="count-badge ${badgeType}">${l.count}x</span>`;
+            }
+            row.insertCell().innerText = l.valor.toFixed(2);
+            if (isDiscrepancyTable) {
+                const actionCell = row.insertCell();
+                actionCell.className = 'col-action';
+                const key = criarChaveItem(l);
+                actionCell.innerHTML = `<input type="checkbox" data-key="${key}" title="Excluir este item de toda a análise">`;
+            }
+        });
+    }
+    tbl.appendChild(tbody);
+}
+
+export function renderPossibleMatches() {
+    // ... (código da função original sem alterações)
+    let matches = [...appState.possibleMatches];
+    const tableId = 'possibleMatchesTbl';
+    const filterTerm = (filterState[tableId] || '').toLowerCase();
+    if (filterTerm) {
+        matches = matches.filter(match => 
+            match.bancoItem.descricao.toLowerCase().includes(filterTerm) ||
+            match.orcItem.descricao.toLowerCase().includes(filterTerm)
+        );
+    }
+    
+    const sortInfo = sortState[tableId];
+    if (sortInfo) {
+        const { key, dir, dataType = 'string' } = sortInfo;
+        matches.sort((a, b) => {
+            const valA = key === 'score' ? a[key] : a.bancoItem[key];
+            const valB = key === 'score' ? b[key] : b.bancoItem[key];
+            let comparison = 0;
+            if (dataType === 'number') {
+                comparison = valA - valB;
+            } else {
+                comparison = String(valA).localeCompare(String(valB), 'pt-BR', { sensitivity: 'base' });
+            }
+            return dir === 'asc' ? comparison : -comparison;
+        });
+    }
+
+    const tbl = DOM.possibleMatchesTbl;
+    tbl.innerHTML = `<thead><tr>
+        <th class="sortable-header" data-table-id="possibleMatchesTbl" data-sort-key="descricao">Banco (Descrição)</th>
+        <th class="sortable-header" data-table-id="possibleMatchesTbl" data-sort-key="descricao">Orçamento (Descrição)</th>
+        <th class="sortable-header" data-table-id="possibleMatchesTbl" data-sort-key="valor" data-data-type="number">Valor (R$)</th>
+        <th class="sortable-header" data-table-id="possibleMatchesTbl" data-sort-key="score" data-data-type="number">Confiança</th>
+        <th>Ação</th>
+    </tr></thead>`;
+    
+    if (sortInfo) {
+        const th = tbl.querySelector(`th[data-sort-key="${sortInfo.key}"]`);
+        if(th) th.setAttribute('data-sort-dir', sortInfo.dir);
+    }
+    const tbody = document.createElement('tbody');
+
+    if (!matches.length && !filterTerm) {
+        DOM.possibleMatchesPanel.classList.add('hidden');
+        return;
+    }
+    DOM.possibleMatchesPanel.classList.remove('hidden');
+
+    if (!matches.length && filterTerm) {
+        tbody.innerHTML = `<tr><td colspan="5" class="no-results">Nenhum resultado para o filtro aplicado.</td></tr>`;
+    } else {
+        matches.forEach(match => {
+            const originalIndex = appState.possibleMatches.indexOf(match);
+            const tr = tbody.insertRow();
+            tr.className = 'possible-match-row';
+            tr.dataset.matchIndex = originalIndex;
+            tr.draggable = true;
+            tr.insertCell().innerText = match.bancoItem.descricao;
+            tr.insertCell().innerText = match.orcItem.descricao;
+            tr.insertCell().innerText = match.bancoItem.valor.toFixed(2);
+            const scoreClass = match.score >= 0.8 ? 'high' : (match.score >= 0.5 ? 'medium' : 'low');
+            tr.insertCell().innerHTML = `<span class="match-score ${scoreClass}">${(match.score * 100).toFixed(0)}%</span>`;
+            const actionCell = tr.insertCell();
+            actionCell.className = 'possible-match-actions';
+            actionCell.innerHTML = `
+                <button class="btn-accept" title="Confirmar conciliação">✓</button>
+                <button class="btn-save-rule" title="Confirmar e Salvar Regra">✓+</button>
+                <button class="btn-reject" title="Marcar como discrepância">✕</button>
+            `;
+        });
+    }
+    tbl.appendChild(tbody);
+}
+
+export function renderLog(logEntries) {
+    // ... (código da função original sem alterações)
+    if (!logEntries || logEntries.length === 0) {
+        DOM.logPanel.classList.add('hidden');
+        return;
+    }
+    DOM.logList.innerHTML = logEntries.map(entry => `<li>${entry}</li>`).join('');
+    DOM.logPanel.classList.remove('hidden');
+    DOM.logList.classList.remove('no-results');
+}
+
+export async function lerArquivo(file, callback) {
+    // ... (código da função original sem alterações)
+    showSpinner();
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (['xlsx', 'xls'].includes(ext)) {
+        try { await loadXLSXLibrary(); } catch (error) {
+            showToast(error.message, 'error'); hideSpinner(); return;
+        }
+    }
+    if (!['csv', 'xlsx', 'xls'].includes(ext)) {
+        showToast('Formato de arquivo não suportado: ' + ext, 'error'); hideSpinner(); return;
+    }
     const reader = new FileReader();
-    reader.onload = (event) => {
-        const result = State.importarRegras(event.target.result, file.name);
-        UI.showToast(result.message, result.success ? 'success' : 'error');
-        // Opcional: Reabrir modal de regras para mostrar as novas
+    reader.onload = e => {
+        try {
+            let linhas;
+            if (ext === 'csv') {
+                linhas = new TextDecoder('utf-8').decode(e.target.result).split(/\r?\n/).map(l => l.split(';'));
+            } else {
+                const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+                linhas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+            }
+            callback(linhas);
+        } catch (error) {
+            console.error("Erro ao processar arquivo:", error); showToast("Ocorreu um erro ao processar o arquivo.", 'error');
+        } finally { hideSpinner(); }
     };
-    reader.readAsText(file);
-  });
-  
-  UI.DOM.btnConfirmarSalvarRegra.addEventListener('click', () => {
-      const ruleType = document.querySelector('input[name="rule-type"]:checked').value;
-      const { bancoDesc, orcDesc, bancoPattern, orcPattern, matchIndex } = UI.DOM.createRuleModal.dataset;
+    reader.onerror = () => { showToast("Não foi possível ler o arquivo.", 'error'); hideSpinner(); };
+    reader.readAsArrayBuffer(file);
+}
 
-      const ruleToSave = (ruleType === 'smart')
-          ? { type: 'smart', banco: bancoPattern, orc: orcPattern }
-          : { type: 'exact', banco: bancoDesc, orc: orcDesc };
-      
-      if (State.saveRule(ruleToSave)) {
-          UI.showToast('Regra salva com sucesso!', 'success');
-      } else {
-          UI.showToast('Esta regra já existe.', 'info');
-      }
+export async function exportarXLSX(dados, nomeArquivo) {
+    // ... (código da função original sem alterações)
+    if (!dados || !dados.length) { showToast("Lista para exportar está vazia.", 'error'); return; }
+    try {
+        await loadXLSXLibrary();
+        const ws = XLSX.utils.json_to_sheet(dados.map(l => ({ 'Data': l.data, 'Descrição': l.descricao, 'Valor': l.valor })));
+        const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Transacoes");
+        XLSX.writeFile(wb, nomeArquivo); showToast('Planilha exportada!', 'success');
+    } catch (error) { showToast(error.message, 'error'); }
+}
 
-      const match = State.appState.possibleMatches[parseInt(matchIndex, 10)];
-      if(match) {
-        State.appState.dadosBanco = State.appState.dadosBanco.filter(item => item !== match.bancoItem);
-        State.appState.dadosOrcamento = State.appState.dadosOrcamento.filter(item => item !== match.orcItem);
-        State.appState.possibleMatches.splice(parseInt(matchIndex, 10), 1);
-        handleComparar();
-      }
-      
-      UI.DOM.createRuleModal.classList.add('hidden');
-  });
+export function exportarCSV(dados, nomeArquivo) {
+    // ... (código da função original sem alterações)
+    if (!dados || !dados.length) { showToast("Não há discrepâncias para exportar.", 'error'); return; }
+    const conteudo = 'Descrição,Valor\n' + dados.map(l => `"${l.descricao}",${l.valor}`).join('\n');
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([conteudo], { type: 'text/csv;charset=utf-8;' }));
+    link.download = nomeArquivo; document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    showToast(`Arquivo ${nomeArquivo} gerado!`, 'success');
+}
 
-  UI.DOM.createRuleModal.addEventListener('click', (e) => {
-      if (e.target.classList.contains('modal-overlay') || e.target.classList.contains('modal-close')) {
-          UI.DOM.createRuleModal.classList.add('hidden');
-      }
-  });
+export function downloadFile(blob, fileName) {
+    // ... (código da função original sem alterações)
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
 
-  // --- Inicialização ---
-  resetApplication();
-});
+export function resetUI() {
+    // ... (código da função original sem alterações)
+    DOM.textoBanco.value = '';
+    DOM.fileBanco.value = '';
+    DOM.fileOrcamento.value = '';
+    DOM.filtroDataInicio.value = '';
+    DOM.novaDataLancamento.value = '';
+    mostrarTabelaBanco([], 'previewBanco');
+    mostrarTabela([], 'previewOrcamento', 'Nenhum orçamento importado.');
+    mostrarTabela([], 'tabelaBanco', 'Nenhuma discrepância encontrada.');
+    mostrarTabela([], 'tabelaOrcamento', 'Nenhuma discrepância encontrada.');
+    DOM.painelRefinamento.classList.add('hidden');
+    DOM.summaryPanel.classList.add('hidden');
+    DOM.possibleMatchesPanel.classList.add('hidden');
+    DOM.logPanel.classList.add('hidden');
+    DOM.logList.innerHTML = '';
+    DOM.actionCenter.classList.add('hidden');
+    DOM.bancoTitle.classList.remove('completed');
+    DOM.orcamentoTitle.classList.remove('completed');
+}
