@@ -595,7 +595,11 @@ async function lerArquivo(file, callback) {
 
 function importarTextoBrutoInteligente(texto) {
   const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  const anoCorrente = new Date().getFullYear();
+  
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0); 
+  const anoCorrente = hoje.getFullYear();
+
   let dados = [];
 
   const regexTabular = /^(\d{2}\/\d{2})\s+(.*?)\s+([\d.,]+)$/;
@@ -603,8 +607,18 @@ function importarTextoBrutoInteligente(texto) {
   linhas.forEach(linha => {
     const match = linha.match(regexTabular);
     if (match) {
-      const [, data, descricao, valorStr] = match;
-      const dataCompleta = `${data}/${anoCorrente}`;
+      const [, dataStr, descricao, valorStr] = match;
+      
+      const [dia, mes] = dataStr.split('/');
+      let anoLancamento = anoCorrente;
+      
+      const dataLancamentoTemp = new Date(anoCorrente, mes - 1, dia);
+      
+      if (dataLancamentoTemp > hoje) {
+        anoLancamento = anoCorrente - 1;
+      }
+      
+      const dataCompleta = `${dataStr}/${anoLancamento}`;
       const valorNumerico = parseFloat(valorStr.replace(/\./g, '').replace(',', '.'));
       const isCredito = /ajuste cred|pagamento em|crédito/i.test(descricao);
       dados.push({
@@ -621,7 +635,15 @@ function importarTextoBrutoInteligente(texto) {
     const regexValor = /^[\d.,]+$/;
     for (let i = 0; i < linhas.length; i++) {
       if (regexData.test(linhas[i]) && (i + 2 < linhas.length) && regexValor.test(linhas[i + 2])) {
-        const dataCompleta = `${linhas[i]}/${anoCorrente}`;
+        
+        const [dia, mes] = linhas[i].split('/');
+        let anoLancamento = anoCorrente;
+        const dataLancamentoTemp = new Date(anoCorrente, mes - 1, dia);
+        if (dataLancamentoTemp > hoje) {
+            anoLancamento = anoCorrente - 1;
+        }
+        const dataCompleta = `${linhas[i]}/${anoLancamento}`;
+
         const valorNumerico = parseFloat(linhas[i + 2].replace(/\./g, '').replace(',', '.'));
         const isCredito = /pagamento em|crédito/i.test(linhas[i + 1]);
         dados.push({ 
