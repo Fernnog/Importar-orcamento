@@ -1,8 +1,6 @@
-// js/motor-regras.js
-
 // --- MOTOR DE REGRAS DE CONCILIAÇÃO ---
 
-export function aplicarRegrasDeConciliacao(bancoItens, orcamentoItens, regras) {
+function aplicarRegrasDeConciliacao(bancoItens, orcamentoItens, regras) {
     const bancoConciliados = new Set();
     const orcamentoConciliados = new Set();
     const _normalizeText = (s = '') => String(s).toUpperCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
