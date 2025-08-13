@@ -1,5 +1,6 @@
 // js/data-processor.js
 import { appState, getRulesObject } from './state-manager.js';
+// LINHA ADICIONADA: Importa a função do motor de regras.
 import { aplicarRegrasDeConciliacao } from './motor-regras.js';
 
 // --- FUNÇÕES DE NORMALIZAÇÃO E CÁLCULO ---
@@ -36,7 +37,6 @@ function levenshteinDistance(a = '', b = '') {
 
 // --- FUNÇÕES DE PROCESSAMENTO DE ENTRADAS ---
 export function importarTextoBrutoInteligente(texto) {
-  // ... (código da função original sem alterações)
   const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0); 
@@ -79,7 +79,6 @@ export function importarTextoBrutoInteligente(texto) {
 }
 
 export function processarDadosOrcamento(linhas) {
-  // ... (código da função original sem alterações)
   if (!linhas || linhas.length < 2) return { success: false, data: [], message: 'Arquivo de orçamento vazio.' };
   const cabecalho = linhas[0].map(h => String(h).toLowerCase().trim());
   const idxDescricao = cabecalho.indexOf('descrição');
@@ -98,7 +97,6 @@ export const extractPattern = (text) => text.replace(/(\s*\(?\d+\s*\/?\s*\d+\)?\
 
 // --- LÓGICA DE CONCILIAÇÃO PRINCIPAL ---
 function encontrarPossiveisMatches(bancoRest, orcRest) {
-    // ... (código da função original sem alterações)
     const suggestions = new Map();
     bancoRest.forEach((bancoItem) => {
         orcRest.forEach((orcItem) => {
@@ -127,7 +125,8 @@ function encontrarPossiveisMatches(bancoRest, orcRest) {
 export function comparar() {
   let logEntries = [];
   const { regras } = getRulesObject();
-  const { bancoConciliados, orcamentoConciliados } = aplicarRegrasDeConciliaacao(appState.dadosBanco, appState.dadosOrcamento, regras);
+  // LINHA CORRIGIDA: Havia um erro de digitação (um 'a' a mais).
+  const { bancoConciliados, orcamentoConciliados } = aplicarRegrasDeConciliacao(appState.dadosBanco, appState.dadosOrcamento, regras);
   if (bancoConciliados.size > 0) {
     logEntries.push(`✅ ${bancoConciliados.size} itens conciliados por regras automáticas.`);
   }
