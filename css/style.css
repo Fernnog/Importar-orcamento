@@ -694,13 +694,11 @@ table th.sortable-header[data-sort-dir="desc"]::after {
 }
 
 #btnModoFoco {
-  background-color: var(--color-yellow-dark);
-  border: 1px solid rgba(255,255,255,0.7);
-  padding: 10px 16px;
-  font-size: 15px;
+  background-color: var(--color-yellow-dark); /* Cor principal */
 }
+
 #btnModoFoco:hover {
-  background-color: var(--color-yellow);
+  background-color: var(--color-yellow); /* Cor no hover */
   color: var(--color-text-dark);
 }
 
