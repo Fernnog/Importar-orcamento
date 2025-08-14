@@ -23,37 +23,45 @@
 <main>
   <div id="actionCenter" class="action-center top-fixed hidden">
     <button id="btnComparar">Comparar</button>
+    <button id="btnModoFoco" class="btn-header" title="Alternar Modo Foco para Comparação">🎯 Modo Foco</button>
   </div>
 
   <section class="container">
     <div class="panel">
-      <h2 id="bancoTitle" class="panel-title panel-title--banco">Dados do Banco<span class="status-icon">✓</span></h2>
-      <input type="file" id="fileBanco" accept=".csv,.xlsx,.xls">
-      <h3>Ou colar extrato bruto</h3>
-      <textarea id="textoBanco" placeholder="Cole aqui o texto copiado do Internet Banking. Ex: fatura do cartão de crédito."></textarea>
-      
-      <div id="painelRefinamento" class="refinement-panel hidden">
-        <div class="input-group">
-          <label for="filtroDataInicio">1. Mostrar lançamentos a partir de:</label>
-          <input type="date" id="filtroDataInicio">
+      <div class="panel-controls">
+        <h2 id="bancoTitle" class="panel-title panel-title--banco">Dados do Banco<span class="status-icon">✓</span></h2>
+        <input type="file" id="fileBanco" accept=".csv,.xlsx,.xls">
+        <h3>Ou colar extrato bruto</h3>
+        <textarea id="textoBanco" placeholder="Cole aqui o texto copiado do Internet Banking. Ex: fatura do cartão de crédito."></textarea>
+        
+        <div id="painelRefinamento" class="refinement-panel hidden">
+          <div class="input-group">
+            <label for="filtroDataInicio">1. Mostrar lançamentos a partir de:</label>
+            <input type="date" id="filtroDataInicio">
+          </div>
+          <div class="input-group">
+            <label for="novaDataLancamento">2. Atribuir nova data para todos:</label>
+            <input type="date" id="novaDataLancamento">
+          </div>
+          <button id="btnRefinarDados">Refinar e Aplicar Nova Data</button>
         </div>
-        <div class="input-group">
-          <label for="novaDataLancamento">2. Atribuir nova data para todos:</label>
-          <input type="date" id="novaDataLancamento">
-        </div>
-        <button id="btnRefinarDados">Refinar e Aplicar Nova Data</button>
+        
+        <button id="btnProcessarTexto">Processar Texto Bruto</button>
+        <button id="btnExportarPlanilha" class="btn-export">Exportar Tabela Acima (XLSX)</button>
       </div>
-      
-      <button id="btnProcessarTexto">Processar Texto Bruto</button>
-      <button id="btnExportarPlanilha" class="btn-export">Exportar Tabela Acima (XLSX)</button>
-      
-      <table id="previewBanco"></table>
+      <div class="panel-content">
+        <table id="previewBanco"></table>
+      </div>
     </div>
 
     <div class="panel">
-      <h2 id="orcamentoTitle" class="panel-title panel-title--orcamento">Dados do Orçamento<span class="status-icon">✓</span></h2>
-      <input type="file" id="fileOrcamento" accept=".csv,.xlsx,.xls">
-      <table id="previewOrcamento"></table>
+      <div class="panel-controls">
+        <h2 id="orcamentoTitle" class="panel-title panel-title--orcamento">Dados do Orçamento<span class="status-icon">✓</span></h2>
+        <input type="file" id="fileOrcamento" accept=".csv,.xlsx,.xls">
+      </div>
+      <div class="panel-content">
+        <table id="previewOrcamento"></table>
+      </div>
     </div>
   </section>
 
@@ -83,12 +91,10 @@
   <section id="possibleMatchesPanel" class="discrepancy-section hidden" aria-live="polite" aria-atomic="true">
     <h2>Possíveis Coincidências (Arraste para uma das caixas acima)</h2>
 
-    <!-- INÍCIO: BLOCO DE FILTRO ADICIONADO -->
     <div class="table-filter-container">
         <label for="filterPossibleMatches">🔍 Filtrar por descrição:</label>
         <input type="text" id="filterPossibleMatches" class="table-filter-input" data-table-id="possibleMatchesTbl" placeholder="Ex: Uber">
     </div>
-    <!-- FIM: BLOCO DE FILTRO ADICIONADO -->
 
     <div class="refinement-panel" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
       <button id="btnAutoMatchHighConfidence" class="btn-export" title="Concilia automaticamente sugestões com confiança acima de 80%">✓ Conciliar Sugestões de Alta Confiança</button>
@@ -102,12 +108,10 @@
   <section class="discrepancy-section">
     <h2>Discrepâncias - Banco</h2>
 
-    <!-- INÍCIO: BLOCO DE FILTRO ADICIONADO -->
     <div class="table-filter-container">
         <label for="filterDiscrepBanco">🔍 Filtrar por descrição:</label>
         <input type="text" id="filterDiscrepBanco" class="table-filter-input" data-table-id="tabelaBanco" placeholder="Ex: Lanche">
     </div>
-    <!-- FIM: BLOCO DE FILTRO ADICIONADO -->
     
     <button id="btnExportarDiscrepBanco" class="btn-export">Exportar CSV</button>
     <table id="tabelaBanco"></table>
@@ -116,12 +120,10 @@
   <section class="discrepancy-section">
     <h2>Discrepâncias - Orçamento</h2>
 
-    <!-- INÍCIO: BLOCO DE FILTRO ADICIONADO -->
     <div class="table-filter-container">
         <label for="filterDiscrepOrc">🔍 Filtrar por descrição:</label>
         <input type="text" id="filterDiscrepOrc" class="table-filter-input" data-table-id="tabelaOrcamento" placeholder="Ex: Mercado">
     </div>
-    <!-- FIM: BLOCO DE FILTRO ADICIONADO -->
     
     <button id="btnExportarDiscrepOrcamento" class="btn-export">Exportar CSV</button>
     <table id="tabelaOrcamento"></table>
