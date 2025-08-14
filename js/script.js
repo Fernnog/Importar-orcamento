@@ -18,100 +18,6 @@ let filterState = {}; // Ex: { tabelaBanco: 'mercado' }
 // --- ELEMENTOS DO DOM (CACHE PARA PERFORMANCE) ---
 const DOM = {};
 
-// --- LÓGICA DE REGRAS DE CONCILIAÇÃO ---
-const RULE_STORAGE_KEY = 'conciliacaoRegrasObjeto';
-
-function getRulesObject() {
-  return JSON.parse(localStorage.getItem(RULE_STORAGE_KEY)) || { timestamp: null, regras: [] };
-}
-
-function saveRule(rule) {
-  const rulesObj = getRulesObject();
-  const ruleExists = rulesObj.regras.some(r => 
-      r.type === rule.type && r.banco === rule.banco && r.orc === rule.orc
-  );
-  if (!ruleExists) {
-    rulesObj.regras.push(rule);
-    localStorage.setItem(RULE_STORAGE_KEY, JSON.stringify(rulesObj));
-    showToast('Regra salva com sucesso!', 'success');
-  } else {
-    showToast('Esta regra já existe.', 'info');
-  }
-}
-
-function deleteRule(bancoDesc, orcDesc) {
-  let rulesObj = getRulesObject();
-  rulesObj.regras = rulesObj.regras.filter(r => r.banco !== bancoDesc || r.orc !== orcDesc);
-  localStorage.setItem(RULE_STORAGE_KEY, JSON.stringify(rulesObj));
-}
-
-function getFormattedTimestamp(date = new Date()) {
-    const YYYY = date.getFullYear();
-    const MM = String(date.getMonth() + 1).padStart(2, '0');
-    const DD = String(date.getDate()).padStart(2, '0');
-    return `${YYYY}${MM}${DD}`;
-}
-
-function exportarRegras() {
-    const rulesObj = getRulesObject();
-    if (rulesObj.regras.length === 0) {
-        showToast("Nenhuma regra para exportar.", "info");
-        return;
-    }
-    
-    const timestamp = getFormattedTimestamp();
-    const nomeArquivo = `${timestamp}_regras_conciliacao.json`;
-    const blob = new Blob([JSON.stringify(rulesObj, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = nomeArquivo;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast(`Arquivo ${nomeArquivo} exportado!`, "success");
-}
-
-function importarRegras(file) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        try {
-            const rulesObj = JSON.parse(e.target.result);
-            if (typeof rulesObj !== 'object' || !('regras' in rulesObj) || !Array.isArray(rulesObj.regras)) {
-                throw new Error("Formato de arquivo inválido. Objeto principal não encontrado.");
-            }
-            
-            const match = file.name.match(/^(\d{8})/);
-            if (match) {
-                const [ , dataStr] = match;
-                const YYYY = dataStr.substring(0, 4);
-                const MM = dataStr.substring(4, 6);
-                const DD = dataStr.substring(6, 8);
-                rulesObj.timestamp = `${DD}/${MM}/${YYYY}`;
-            } else {
-                rulesObj.timestamp = 'Data desconhecida';
-            }
-
-            localStorage.setItem(RULE_STORAGE_KEY, JSON.stringify(rulesObj));
-            showToast(`${rulesObj.regras.length} regras importadas com sucesso!`, "success");
-            
-            if (!DOM.regrasModal.classList.contains('hidden')) {
-                DOM.btnGerenciarRegras.click(); 
-                DOM.btnGerenciarRegras.click();
-            }
-        } catch (error) {
-            showToast("Erro ao importar regras: " + error.message, "error");
-        }
-    };
-    reader.readAsText(file);
-}
-
-function extractPattern(text) {
-    return text.replace(/(\s*\(?\d+\s*\/?\s*\d+\)?\s*)$/, '').trim();
-}
-
 // --- FUNÇÕES DE LÓGICA DE SUGESTÃO ---
 function normalizeText(s = '') {
   return String(s).toUpperCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
@@ -925,6 +831,7 @@ document.addEventListener('DOMContentLoaded', () => {
     bancoTitle: document.querySelector('.panel-title--banco'),
     orcamentoTitle: document.querySelector('.panel-title--orcamento'),
     btnComparar: document.getElementById('btnComparar'),
+    btnModoFoco: document.getElementById('btnModoFoco'), // NOVO BOTÃO
     btnExportarDiscrepBanco: document.getElementById('btnExportarDiscrepBanco'),
     btnExportarDiscrepOrcamento: document.getElementById('btnExportarDiscrepOrcamento'),
     summaryPanel: document.getElementById('summaryPanel'),
@@ -1171,6 +1078,13 @@ document.addEventListener('DOMContentLoaded', () => {
       if (e.target.classList.contains('modal-overlay') || e.target.classList.contains('modal-close')) {
           DOM.modalCopia.classList.add('hidden');
       }
+  });
+  
+  // NOVO LISTENER PARA O MODO FOCO
+  DOM.btnModoFoco.addEventListener('click', () => {
+    document.body.classList.toggle('focus-mode-active');
+    const isFocusActive = document.body.classList.contains('focus-mode-active');
+    showToast(`Modo Foco ${isFocusActive ? 'Ativado' : 'Desativado'}.`, 'info');
   });
 
   // --- INICIALIZAÇÃO ---
