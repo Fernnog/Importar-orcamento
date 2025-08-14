@@ -18,6 +18,9 @@ let filterState = {}; // Ex: { tabelaBanco: 'mercado' }
 // --- ELEMENTOS DO DOM (CACHE PARA PERFORMANCE) ---
 const DOM = {};
 
+// --- LÓGICA DE REGRAS DE CONCILIAÇÃO ---
+// Toda a lógica foi movida para motor-regras.js
+
 // --- FUNÇÕES DE LÓGICA DE SUGESTÃO ---
 function normalizeText(s = '') {
   return String(s).toUpperCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
@@ -286,7 +289,6 @@ function comparar() {
   
   let logEntries = [];
   
-  // PASSO 0: Aplicar regras salvas (USANDO O MOTOR DE REGRAS EXTERNO)
   const { regras } = getRulesObject();
   const { bancoConciliados, orcamentoConciliados } = aplicarRegrasDeConciliacao(appState.dadosBanco, appState.dadosOrcamento, regras);
   
@@ -299,7 +301,6 @@ function comparar() {
   let bancoRestante = appState.dadosBanco.filter(i => !bancoConciliados.has(i));
   let orcRestante = appState.dadosOrcamento.filter(i => !orcamentoConciliados.has(i));
   
-  // PASSO 1: Conciliação exata
   const chavesOrcamentoExatas = new Set(orcRestante.map(criarChaveItem));
   const bancoConciliadosExatos = new Set();
 
@@ -326,14 +327,12 @@ function comparar() {
       return false;
   }));
   
-  // Adiciona os conciliados exatos aos conjuntos totais
   bancoConciliadosExatos.forEach(item => bancoConciliados.add(item));
   orcamentoConciliadosExatos.forEach(item => orcamentoConciliados.add(item));
 
   bancoRestante = appState.dadosBanco.filter(item => !bancoConciliados.has(item));
   orcRestante = appState.dadosOrcamento.filter(item => !orcamentoConciliados.has(item));
 
-  // PASSO 2: Encontrar e APRESENTAR possíveis matches
   if (!appState.possibleMatches.length) {
       appState.possibleMatches = encontrarPossiveisMatches(bancoRestante, orcRestante);
   }
@@ -355,7 +354,6 @@ function comparar() {
       return; 
   }
   
-  // PASSO 3: Se não há sugestões, calcula as DISCREPÂNCIAS finais
   DOM.possibleMatchesPanel.classList.add('hidden');
   const chavesOrcamentoParciais = new Set(orcRestante.map(criarChaveParcialItem));
   const chavesBancoParciais = new Set(bancoRestante.map(criarChaveParcialItem));
@@ -366,7 +364,6 @@ function comparar() {
   appState.discrepOrc = orcRestante
       .filter(item => !chavesBancoParciais.has(criarChaveParcialItem(item)));
 
-  // PASSO 4: Atualiza o resumo e as tabelas de discrepâncias
   const reconciledCountFinal = appState.dadosBancoOriginais.length - appState.discrepBanco.length;
   animateCounter(DOM.summaryReconciled, 0, reconciledCountFinal, 750);
   animateCounter(DOM.summaryBank, 0, appState.discrepBanco.length, 750);
@@ -831,7 +828,6 @@ document.addEventListener('DOMContentLoaded', () => {
     bancoTitle: document.querySelector('.panel-title--banco'),
     orcamentoTitle: document.querySelector('.panel-title--orcamento'),
     btnComparar: document.getElementById('btnComparar'),
-    btnModoFoco: document.getElementById('btnModoFoco'), // NOVO BOTÃO
     btnExportarDiscrepBanco: document.getElementById('btnExportarDiscrepBanco'),
     btnExportarDiscrepOrcamento: document.getElementById('btnExportarDiscrepOrcamento'),
     summaryPanel: document.getElementById('summaryPanel'),
@@ -859,6 +855,8 @@ document.addEventListener('DOMContentLoaded', () => {
     btnCopiarInfo: document.getElementById('btnCopiarInfo'),
     logPanel: document.getElementById('logPanel'),
     logList: document.getElementById('logList'),
+    btnModoFoco: document.getElementById('btnModoFoco'),
+    btnExitFocusMode: document.getElementById('btnExitFocusMode'),
   });
 
   const dropTargets = document.querySelectorAll('.summary-panel .metric-item');
@@ -971,7 +969,6 @@ document.addEventListener('DOMContentLoaded', () => {
       comparar();
   });
 
-  // Listeners para o Modal de Gerenciamento de Regras
   DOM.btnGerenciarRegras.addEventListener('click', () => {
     DOM.regrasModal.classList.toggle('hidden');
     if (DOM.regrasModal.classList.contains('hidden')) return;
@@ -1021,7 +1018,6 @@ document.addEventListener('DOMContentLoaded', () => {
   DOM.btnImportarRegras.addEventListener('click', () => DOM.importFile.click());
   DOM.importFile.addEventListener('change', (e) => importarRegras(e.target.files[0]));
 
-  // Listeners para o Modal de Criação de Regra
   DOM.btnConfirmarSalvarRegra.addEventListener('click', () => {
       const ruleType = document.querySelector('input[name="rule-type"]:checked').value;
       const { bancoDesc, orcDesc, bancoPattern, orcPattern, matchIndex } = DOM.createRuleModal.dataset;
@@ -1079,14 +1075,35 @@ document.addEventListener('DOMContentLoaded', () => {
           DOM.modalCopia.classList.add('hidden');
       }
   });
-  
-  // NOVO LISTENER PARA O MODO FOCO
+
+  function toggleFocusMode(forceOff = false) {
+    const body = document.body;
+    const isCurrentlyActive = body.classList.contains('focus-mode-active');
+    
+    if (forceOff || isCurrentlyActive) {
+      body.classList.remove('focus-mode-active');
+      DOM.btnExitFocusMode.classList.add('hidden');
+      if (isCurrentlyActive) showToast('Modo Foco Desativado.', 'info');
+    } else {
+      body.classList.add('focus-mode-active');
+      DOM.btnExitFocusMode.classList.remove('hidden');
+      showToast('Modo Foco Ativado. Pressione "Esc" ou clique no botão para sair.', 'info');
+    }
+  }
+
   DOM.btnModoFoco.addEventListener('click', () => {
-    document.body.classList.toggle('focus-mode-active');
-    const isFocusActive = document.body.classList.contains('focus-mode-active');
-    showToast(`Modo Foco ${isFocusActive ? 'Ativado' : 'Desativado'}.`, 'info');
+    toggleFocusMode(); 
   });
 
-  // --- INICIALIZAÇÃO ---
+  DOM.btnExitFocusMode.addEventListener('click', () => {
+    toggleFocusMode(true);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.body.classList.contains('focus-mode-active')) {
+      toggleFocusMode(true);
+    }
+  });
+
   resetApplication();
 });
