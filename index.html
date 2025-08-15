@@ -29,7 +29,7 @@
   <section class="container">
     <div class="panel">
       <div class="panel-controls">
-        <h2 id="bancoTitle" class="panel-title panel-title--banco">Dados do Banco<span class="status-icon">✓</span></h2>
+        <h2 id="bancoTitle" class="panel-title panel-title--banco">Dados do Banco<span id="bancoHiddenCount" class="hidden-count hidden"></span><span class="status-icon">✓</span></h2>
         <input type="file" id="fileBanco" accept=".csv,.xlsx,.xls">
         <h3>Ou colar extrato bruto</h3>
         <textarea id="textoBanco" placeholder="Cole aqui o texto copiado do Internet Banking. Ex: fatura do cartão de crédito."></textarea>
@@ -47,7 +47,7 @@
         </div>
         
         <button id="btnProcessarTexto">Processar Texto Bruto</button>
-        <button id="btnAplicarRegrasExclusao" class="btn-header" style="background-color: var(--color-red-error);">Limpar com Regras</button>
+        <button id="btnAplicarRegrasExclusao" class="btn-header" style="background-color: var(--color-red-error); margin-top: 10px;">Limpar com Regras</button>
         <button id="btnExportarPlanilha" class="btn-export">Exportar Tabela Acima (XLSX)</button>
       </div>
       <div class="panel-content">
