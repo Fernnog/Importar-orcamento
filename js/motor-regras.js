@@ -1,6 +1,31 @@
+// js/motor-regras.js
+
 // --- MOTOR DE REGRAS DE CONCILIAÇÃO (MÓDULO ISOLADO) ---
 
 const RULE_STORAGE_KEY = 'conciliacaoRegrasObjeto';
+const EXCLUSION_RULE_STORAGE_KEY = 'conciliacaoRegrasExclusao';
+
+// Novas funções para gerenciar regras de exclusão
+function getExclusionRules() {
+  return JSON.parse(localStorage.getItem(EXCLUSION_RULE_STORAGE_KEY)) || [];
+}
+
+function saveExclusionRule(description) {
+  const rules = getExclusionRules();
+  if (!rules.includes(description)) {
+    rules.push(description);
+    localStorage.setItem(EXCLUSION_RULE_STORAGE_KEY, JSON.stringify(rules));
+    return true; // Indica sucesso
+  }
+  return false; // Indica que já existia
+}
+
+function deleteExclusionRule(description) {
+  let rules = getExclusionRules();
+  rules = rules.filter(rule => rule !== description);
+  localStorage.setItem(EXCLUSION_RULE_STORAGE_KEY, JSON.stringify(rules));
+  showToast(`Regra de exclusão para "${description}" removida.`, 'info');
+}
 
 function getRulesObject() {
   return JSON.parse(localStorage.getItem(RULE_STORAGE_KEY)) || { timestamp: null, regras: [] };
