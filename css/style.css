@@ -370,28 +370,6 @@ button:disabled {
   background-color: var(--color-pink-dark);
 }
 
-.btn-undo-exclusion {
-  background-color: var(--color-yellow-dark);
-  color: white;
-  border: none;
-  padding: 4px 8px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.btn-add-exclusion-rule {
-  background-color: transparent;
-  border: 1px solid #ccc;
-  color: #777;
-  padding: 4px 8px;
-  font-size: 12px;
-  border-radius: 4px;
-}
-.btn-add-exclusion-rule:hover {
-  background-color: var(--color-red-error);
-  color: white;
-}
-
 /* Tables, Forms & Misc */
 textarea {
   box-sizing: border-box;
@@ -426,12 +404,6 @@ th {
     width: 40px;
     text-align: center;
 }
-
-#previewBanco td.col-action, #previewBanco th.col-action {
-    width: 80px;
-    text-align: center;
-}
-
 
 .no-results {
   text-align: center;
@@ -582,7 +554,7 @@ th {
   padding: 10px;
   border-bottom: 1px solid var(--color-border);
 }
-#listaRegras li .btn-delete-rule, #listaRegras li .btn-delete-exclusion-rule {
+#listaRegras li .btn-delete-rule {
   background-color: var(--color-red-error);
   padding: 4px 8px;
   font-size: 12px;
@@ -631,7 +603,7 @@ th {
   display: none !important;
 }
 
-/* --- 6. ESTILOS PARA SUGESTÕES DE MATCH --- */
+/* --- 6. ESTILOS PARA SUGESTÕES DE MATCH E REGRAS DE EXCLUSÃO --- */
 .match-score {
   display: inline-block;
   padding: 4px 8px;
@@ -673,12 +645,36 @@ th {
 #btnIgnoreAllPossible { background-color: var(--color-red-error); border-color: rgba(255,255,255,0.7); }
 #btnIgnoreAllPossible:hover { background-color: #a82c21; }
 
-.preview-table-row.fading-out {
+/* Estilos para a funcionalidade de Ignorar/Desfazer */
+tr.fading-out {
   opacity: 0.4;
   transition: opacity 0.5s ease;
   background-color: #fbe9e7;
 }
 
+.btn-undo-exclusion {
+  background-color: var(--color-yellow-dark);
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  margin: 0;
+}
+
+.btn-add-exclusion-rule {
+  background-color: transparent;
+  border: 1px solid #ccc;
+  color: #777;
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+  margin: 0;
+}
+.btn-add-exclusion-rule:hover {
+  background-color: var(--color-red-error);
+  color: white;
+}
 
 /* --- 7. ORDENAÇÃO, FILTRAGEM E MODO FOCO --- */
 table th.sortable-header {
@@ -730,11 +726,11 @@ table th.sortable-header[data-sort-dir="desc"]::after {
 }
 
 #btnModoFoco {
-  background-color: var(--color-yellow-dark); /* Cor principal */
+  background-color: var(--color-yellow-dark);
 }
 
 #btnModoFoco:hover {
-  background-color: var(--color-yellow); /* Cor no hover */
+  background-color: var(--color-yellow);
   color: var(--color-text-dark);
 }
 
@@ -755,7 +751,8 @@ body.focus-mode-active main {
   max-width: 100%;
 }
 
-body.focus-mode-active #previewBanco .preview-table-row.fading-out {
+/* Regra corrigida e definitiva para ocultar itens ignorados no Modo Foco */
+body.focus-mode-active #previewBanco tr.fading-out {
   display: none !important;
 }
 
