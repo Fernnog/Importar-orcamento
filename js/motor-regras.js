@@ -1,31 +1,9 @@
-// js/motor-regras.js
-
 // --- MOTOR DE REGRAS DE CONCILIAÇÃO (MÓDULO ISOLADO) ---
 
 const RULE_STORAGE_KEY = 'conciliacaoRegrasObjeto';
 const EXCLUSION_RULE_STORAGE_KEY = 'conciliacaoRegrasExclusao';
 
-// Novas funções para gerenciar regras de exclusão
-function getExclusionRules() {
-  return JSON.parse(localStorage.getItem(EXCLUSION_RULE_STORAGE_KEY)) || [];
-}
-
-function saveExclusionRule(description) {
-  const rules = getExclusionRules();
-  if (!rules.includes(description)) {
-    rules.push(description);
-    localStorage.setItem(EXCLUSION_RULE_STORAGE_KEY, JSON.stringify(rules));
-    return true; // Indica sucesso
-  }
-  return false; // Indica que já existia
-}
-
-function deleteExclusionRule(description) {
-  let rules = getExclusionRules();
-  rules = rules.filter(rule => rule !== description);
-  localStorage.setItem(EXCLUSION_RULE_STORAGE_KEY, JSON.stringify(rules));
-  showToast(`Regra de exclusão para "${description}" removida.`, 'info');
-}
+// --- Funções para Regras de Conciliação ---
 
 function getRulesObject() {
   return JSON.parse(localStorage.getItem(RULE_STORAGE_KEY)) || { timestamp: null, regras: [] };
@@ -50,6 +28,32 @@ function deleteRule(bancoDesc, orcDesc) {
   rulesObj.regras = rulesObj.regras.filter(r => r.banco !== bancoDesc || r.orc !== orcDesc);
   localStorage.setItem(RULE_STORAGE_KEY, JSON.stringify(rulesObj));
 }
+
+// --- Funções para Regras de Exclusão (Ignorar Lançamentos) ---
+
+function getExclusionRules() {
+  return JSON.parse(localStorage.getItem(EXCLUSION_RULE_STORAGE_KEY)) || [];
+}
+
+function saveExclusionRule(description) {
+  const rules = getExclusionRules();
+  if (!rules.includes(description)) {
+    rules.push(description);
+    localStorage.setItem(EXCLUSION_RULE_STORAGE_KEY, JSON.stringify(rules));
+    return true; // Sucesso
+  }
+  return false; // Regra já existia
+}
+
+function deleteExclusionRule(description) {
+  let rules = getExclusionRules();
+  rules = rules.filter(rule => rule !== description);
+  localStorage.setItem(EXCLUSION_RULE_STORAGE_KEY, JSON.stringify(rules));
+  showToast(`Regra de exclusão para "${description}" removida.`, 'info');
+}
+
+
+// --- Funções de Importação/Exportação de Regras ---
 
 function getFormattedTimestamp(date = new Date()) {
     const YYYY = date.getFullYear();
