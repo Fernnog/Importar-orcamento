@@ -18,7 +18,7 @@ let filterState = {}; // Ex: { tabelaBanco: 'mercado' }
 // --- ELEMENTOS DO DOM (CACHE PARA PERFORMANCE) ---
 const DOM = {};
 
-// --- LÓGICA DE REGRAS DE CONCILIAÇÃO ---
+// --- LÓgica DE REGRAS DE CONCILIAÇÃO ---
 // Toda a lógica foi movida para motor-regras.js
 
 // --- FUNÇÕES DE LÓGICA DE SUGESTÃO ---
@@ -603,6 +603,7 @@ function mostrarTabelaBanco(dados, id) {
     <th class="sortable-header" data-table-id="${id}" data-sort-key="data" data-data-type="date">Data</th>
     <th class="sortable-header" data-table-id="${id}" data-sort-key="descricao">Descrição</th>
     <th class="sortable-header" data-table-id="${id}" data-sort-key="valor" data-data-type="number">Valor (R$)</th>
+    <th class="col-action">Ação</th>
   </tr></thead>`;
   
   if (sortInfo) {
@@ -614,10 +615,11 @@ function mostrarTabelaBanco(dados, id) {
   const noResultsMessage = DOM.textoBanco.value.trim() ? 'Nenhum lançamento válido.' : 'Aguardando dados...';
   
   if (!dadosParaRenderizar || !dadosParaRenderizar.length) {
-    tbody.innerHTML = `<tr><td colspan="3" class="no-results">${noResultsMessage}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" class="no-results">${noResultsMessage}</td></tr>`;
   } else {
     dadosParaRenderizar.forEach(l => {
       const row = tbody.insertRow();
+      row.classList.add('preview-table-row');
       row.insertCell().innerText = l.data; 
       const descCell = row.insertCell();
       descCell.innerText = l.descricao;
@@ -625,6 +627,9 @@ function mostrarTabelaBanco(dados, id) {
           descCell.innerHTML += ` <span class="count-badge banco">${l.count}x</span>`;
       }
       row.insertCell().innerText = l.valor.toFixed(2);
+      const actionCell = row.insertCell();
+      actionCell.className = 'col-action';
+      actionCell.innerHTML = `<button class="btn-add-exclusion-rule" data-description="${l.descricao}" title="Criar regra para ignorar esta descrição">Ignorar</button>`;
     });
   }
   tbl.appendChild(tbody);
@@ -822,6 +827,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnNovaConciliacao: document.getElementById('btnNovaConciliacao'),
     btnGerenciarRegras: document.getElementById('btnGerenciarRegras'),
     btnProcessarTexto: document.getElementById('btnProcessarTexto'),
+    btnAplicarRegrasExclusao: document.getElementById('btnAplicarRegrasExclusao'),
     btnRefinarDados: document.getElementById('btnRefinarDados'),
     btnExportarPlanilha: document.getElementById('btnExportarPlanilha'),
     actionCenter: document.getElementById('actionCenter'),
@@ -996,6 +1002,24 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         DOM.regrasModalPlaceholder.classList.remove('hidden');
     }
+
+    const exclusionRules = getExclusionRules();
+    if (exclusionRules.length > 0) {
+        const header = document.createElement('h3');
+        header.textContent = 'Regras de Exclusão (Ignorar Lançamentos)';
+        header.style.marginTop = '20px';
+        DOM.listaRegras.appendChild(header);
+
+        exclusionRules.forEach(ruleDesc => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <span><strong>Descrição a ser ignorada:</strong> ${ruleDesc}</span>
+                <button class="btn-delete-exclusion-rule" data-description="${ruleDesc}">Excluir</button>
+            `;
+            DOM.listaRegras.appendChild(li);
+        });
+        DOM.regrasModalPlaceholder.classList.add('hidden');
+    }
   });
 
   DOM.regrasModal.addEventListener('click', (e) => {
@@ -1007,10 +1031,15 @@ document.addEventListener('DOMContentLoaded', () => {
       deleteRule(banco, orc);
       e.target.parentElement.remove();
       showToast('Regra excluída.', 'success');
-      if (getRulesObject().regras.length === 0) {
+      if (getRulesObject().regras.length === 0 && getExclusionRules().length === 0) {
         DOM.regrasModalPlaceholder.classList.remove('hidden');
         DOM.infoVersaoRegras.classList.add('hidden');
       }
+    }
+    if (e.target.classList.contains('btn-delete-exclusion-rule')) {
+        const description = e.target.dataset.description;
+        deleteExclusionRule(description);
+        e.target.parentElement.remove();
     }
   });
 
@@ -1103,6 +1132,39 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Escape' && document.body.classList.contains('focus-mode-active')) {
       toggleFocusMode(true);
     }
+  });
+
+  DOM.btnAplicarRegrasExclusao.addEventListener('click', () => {
+    const exclusionRules = getExclusionRules();
+    if (exclusionRules.length === 0) {
+        showToast('Nenhuma regra de exclusão para aplicar.', 'info');
+        return;
+    }
+    const initialCount = appState.dadosBanco.length;
+    appState.dadosBanco = appState.dadosBanco.filter(item => !exclusionRules.includes(item.descricao));
+    const removedCount = initialCount - appState.dadosBanco.length;
+    mostrarTabelaBanco(appState.dadosBanco, 'previewBanco');
+    showToast(`${removedCount} lançamento(s) removido(s) com base nas regras.`, 'success');
+  });
+
+  DOM.previewBancoTbl.addEventListener('click', (e) => {
+      const target = e.target;
+      const row = target.closest('tr');
+      if (!row) return;
+
+      if (target.classList.contains('btn-add-exclusion-rule')) {
+          const description = target.dataset.description;
+          if (saveExclusionRule(description)) {
+              showToast(`Regra de exclusão para "${description}" salva!`, 'success');
+              row.classList.add('fading-out');
+              target.parentElement.innerHTML = `<button class="btn-undo-exclusion" data-description="${description}">Desfazer</button>`;
+          }
+      } else if (target.classList.contains('btn-undo-exclusion')) {
+          const description = target.dataset.description;
+          deleteExclusionRule(description);
+          row.classList.remove('fading-out');
+          target.parentElement.innerHTML = `<button class="btn-add-exclusion-rule" data-description="${description}" title="Criar regra para ignorar esta descrição">Ignorar</button>`;
+      }
   });
 
   resetApplication();
