@@ -400,8 +400,10 @@ th {
 }
 
 .discrepancy-section table th.col-action,
-.discrepancy-section table td.col-action {
-    width: 40px;
+.discrepancy-section table td.col-action,
+#previewBanco th.col-action,
+#previewBanco td.col-action {
+    width: 80px;
     text-align: center;
 }
 
@@ -736,4 +738,46 @@ body.focus-mode-active main {
 }
 #btnExitFocusMode:hover {
   background-color: #e74c3c;
+}
+
+/* --- 8. ESTILOS PARA REGRAS DE EXCLUSÃO (NOVO) --- */
+.preview-table-row.fading-out {
+  opacity: 0.4;
+  transition: opacity 0.5s ease;
+  background-color: #fbe9e7; /* Um tom de vermelho bem claro */
+}
+
+.btn-undo-exclusion {
+  background-color: var(--color-yellow-dark);
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  margin: 0;
+}
+.btn-undo-exclusion:hover {
+    background-color: var(--color-yellow);
+}
+
+.btn-add-exclusion-rule {
+  background-color: transparent;
+  border: 1px solid #ccc;
+  color: #777;
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+  margin: 0;
+}
+.btn-add-exclusion-rule:hover {
+  background-color: var(--color-red-error);
+  color: white;
+  border-color: var(--color-red-error);
+}
+
+#listaRegras li .btn-delete-exclusion-rule {
+  background-color: var(--color-red-error);
+  padding: 4px 8px;
+  font-size: 12px;
+  margin: 0;
 }
