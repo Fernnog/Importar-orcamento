@@ -1,9 +1,19 @@
 # Ferramenta de Análise de Lançamentos
 
 ## 📖 Contexto
-Esta ferramenta foi criada para substituir uma automação antiga que rodava no **Google Planilhas**. Naquela solução original, um extrato bruto do **internet banking** era colado na planilha, onde um script organizava e conciliava os dados com uma aba de orçamento.
+Esta ferramenta foi desenvolvida para um fluxo de trabalho altamente personalizado, servindo como um poderoso assistente para a conciliação de um orçamento doméstico. A sua finalidade principal é resolver um desafio comum no controle financeiro manual: a divergência entre os gastos registrados e o que foi efetivamente cobrado no extrato bancário.
 
-O objetivo desta nova versão é **eliminar a dependência do Google Planilhas** e oferecer um processo mais rápido e poderoso, de forma **100% local no navegador**. Assim, não há envio de dados a nenhum servidor, garantindo a **privacidade total** das suas informações financeiras.
+#### O Problema a Ser Resolvido
+Manter um orçamento manual, mesmo com a ajuda de plataformas online, está sujeito a falhas humanas. É comum esquecer de registrar uma despesa, lançar um valor equivocado ou não dar baixa em um pagamento. Com o tempo, essas pequenas inconsistências se acumulam, gerando um desalinhamento entre o saldo previsto no orçamento e o saldo real da conta. A verificação manual, linha por linha, entre o orçamento e o extrato do banco é um processo demorado, repetitivo e cansativo.
+
+#### O Fluxo de Trabalho Específico
+Para resolver esse problema, a ferramenta automatiza a "confrontação" de dados de duas fontes distintas, que formam a base desta análise:
+
+1.  **A Fonte da Verdade (O Extrato do Banco):** Os dados de referência são obtidos do extrato do cartão de crédito do **Internet Banking da Caixa Econômica Federal**. Como o site não oferece uma opção de exportação estruturada, o usuário copia o texto bruto diretamente da página do navegador. A ferramenta possui uma inteligência interna para processar esse texto caótico, descartando informações irrelevantes e extraindo apenas os dados essenciais de cada transação (Data, Descrição e Valor), organizando tudo em uma tabela limpa e pronta para análise.
+
+2.  **O Registro Manual (O Orçamento):** O controle do orçamento é realizado através de lançamentos manuais no site **Minhas Economias** (`minhaseconomias.com.br`). Ao final de um período, o usuário exporta esses lançamentos em um arquivo de planilha (formato CSV, XLSX ou XLS), que é então importado pela ferramenta.
+
+O objetivo desta nova versão é **eliminar a dependência de soluções externas como o Google Planilhas** e oferecer um processo mais rápido e poderoso, de forma **100% local no navegador**. Assim, não há envio de dados a nenhum servidor, garantindo a **privacidade total** das suas informações financeiras.
 
 ---
 
