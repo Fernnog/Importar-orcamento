@@ -123,8 +123,7 @@ h2 {
 }
 
 .panel h2.panel-title {
-  display: inline-flex;
-  align-items: center;
+  display: inline-block;
   padding: 5px 12px;
   border-radius: 15px;
   color: var(--color-white);
@@ -371,6 +370,28 @@ button:disabled {
   background-color: var(--color-pink-dark);
 }
 
+.btn-undo-exclusion {
+  background-color: var(--color-yellow-dark);
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.btn-add-exclusion-rule {
+  background-color: transparent;
+  border: 1px solid #ccc;
+  color: #777;
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+}
+.btn-add-exclusion-rule:hover {
+  background-color: var(--color-red-error);
+  color: white;
+}
+
 /* Tables, Forms & Misc */
 textarea {
   box-sizing: border-box;
@@ -406,8 +427,7 @@ th {
     text-align: center;
 }
 
-#previewBanco th.col-action,
-#previewBanco td.col-action {
+#previewBanco td.col-action, #previewBanco th.col-action {
     width: 80px;
     text-align: center;
 }
@@ -562,8 +582,7 @@ th {
   padding: 10px;
   border-bottom: 1px solid var(--color-border);
 }
-#listaRegras li .btn-delete-rule,
-#listaRegras li .btn-delete-exclusion-rule {
+#listaRegras li .btn-delete-rule, #listaRegras li .btn-delete-exclusion-rule {
   background-color: var(--color-red-error);
   padding: 4px 8px;
   font-size: 12px;
@@ -654,6 +673,13 @@ th {
 #btnIgnoreAllPossible { background-color: var(--color-red-error); border-color: rgba(255,255,255,0.7); }
 #btnIgnoreAllPossible:hover { background-color: #a82c21; }
 
+.preview-table-row.fading-out {
+  opacity: 0.4;
+  transition: opacity 0.5s ease;
+  background-color: #fbe9e7;
+}
+
+
 /* --- 7. ORDENAÇÃO, FILTRAGEM E MODO FOCO --- */
 table th.sortable-header {
   cursor: pointer;
@@ -729,6 +755,10 @@ body.focus-mode-active main {
   max-width: 100%;
 }
 
+body.focus-mode-active #previewBanco .preview-table-row.fading-out {
+  display: none !important;
+}
+
 #btnExitFocusMode {
   position: fixed;
   top: 20px;
@@ -745,56 +775,4 @@ body.focus-mode-active main {
 }
 #btnExitFocusMode:hover {
   background-color: #e74c3c;
-}
-
-/* --- 8. REGRAS PARA EXCLUSÃO DE LANÇAMENTOS --- */
-.preview-table-row.fading-out {
-  opacity: 0.4;
-  transition: opacity 0.5s ease;
-  background-color: #fbe9e7; /* Um tom de vermelho bem claro */
-}
-
-/* Esconde completamente a linha esmaecida no Modo Foco */
-body.focus-mode-active .preview-table-row.fading-out {
-  display: none;
-}
-
-.btn-add-exclusion-rule {
-  background-color: transparent;
-  border: 1px solid #ccc;
-  color: #777;
-  padding: 4px 8px;
-  font-size: 12px;
-  border-radius: 4px;
-  margin: 0;
-}
-.btn-add-exclusion-rule:hover {
-  background-color: var(--color-red-error);
-  color: white;
-  border-color: var(--color-red-error);
-}
-
-.btn-undo-exclusion {
-  background-color: var(--color-yellow-dark);
-  color: white;
-  border: none;
-  padding: 4px 8px;
-  font-size: 12px;
-  cursor: pointer;
-  margin: 0;
-  border-radius: 4px;
-}
-.btn-undo-exclusion:hover {
-  background-color: var(--color-yellow);
-  color: var(--color-text-dark);
-}
-
-.hidden-count {
-  font-size: 13px;
-  font-weight: normal;
-  color: var(--color-text-light);
-  margin-left: 10px;
-  background-color: var(--color-background-light);
-  padding: 2px 8px;
-  border-radius: 10px;
 }
