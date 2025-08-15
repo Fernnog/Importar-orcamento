@@ -18,7 +18,7 @@ let filterState = {}; // Ex: { tabelaBanco: 'mercado' }
 // --- ELEMENTOS DO DOM (CACHE PARA PERFORMANCE) ---
 const DOM = {};
 
-// --- LÓgica DE REGRAS DE CONCILIAÇÃO ---
+// --- LÓGICA DE REGRAS DE CONCILIAÇÃO ---
 // Toda a lógica foi movida para motor-regras.js
 
 // --- FUNÇÕES DE LÓGICA DE SUGESTÃO ---
@@ -827,7 +827,6 @@ document.addEventListener('DOMContentLoaded', () => {
     btnNovaConciliacao: document.getElementById('btnNovaConciliacao'),
     btnGerenciarRegras: document.getElementById('btnGerenciarRegras'),
     btnProcessarTexto: document.getElementById('btnProcessarTexto'),
-    btnAplicarRegrasExclusao: document.getElementById('btnAplicarRegrasExclusao'),
     btnRefinarDados: document.getElementById('btnRefinarDados'),
     btnExportarPlanilha: document.getElementById('btnExportarPlanilha'),
     actionCenter: document.getElementById('actionCenter'),
@@ -863,6 +862,7 @@ document.addEventListener('DOMContentLoaded', () => {
     logList: document.getElementById('logList'),
     btnModoFoco: document.getElementById('btnModoFoco'),
     btnExitFocusMode: document.getElementById('btnExitFocusMode'),
+    btnAplicarRegrasExclusao: document.getElementById('btnAplicarRegrasExclusao'),
   });
 
   const dropTargets = document.querySelectorAll('.summary-panel .metric-item');
@@ -988,7 +988,9 @@ document.addEventListener('DOMContentLoaded', () => {
         DOM.infoVersaoRegras.classList.add('hidden');
     }
 
-    DOM.listaRegras.innerHTML = '';
+    const container = DOM.listaRegras;
+    container.innerHTML = '';
+    
     if (regras.length > 0) {
         DOM.regrasModalPlaceholder.classList.add('hidden');
         regras.forEach(rule => {
@@ -997,7 +999,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <span><strong>Banco:</strong> ${rule.banco} → <strong>Orçamento:</strong> ${rule.orc}</span>
                 <button class="btn-delete-rule" data-banco="${rule.banco}" data-orc="${rule.orc}">Excluir</button>
             `;
-            DOM.listaRegras.appendChild(li);
+            container.appendChild(li);
         });
     } else {
         DOM.regrasModalPlaceholder.classList.remove('hidden');
@@ -1008,7 +1010,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const header = document.createElement('h3');
         header.textContent = 'Regras de Exclusão (Ignorar Lançamentos)';
         header.style.marginTop = '20px';
-        DOM.listaRegras.appendChild(header);
+        container.appendChild(header);
 
         exclusionRules.forEach(ruleDesc => {
             const li = document.createElement('li');
@@ -1016,9 +1018,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 <span><strong>Descrição a ser ignorada:</strong> ${ruleDesc}</span>
                 <button class="btn-delete-exclusion-rule" data-description="${ruleDesc}">Excluir</button>
             `;
-            DOM.listaRegras.appendChild(li);
+            container.appendChild(li);
         });
         DOM.regrasModalPlaceholder.classList.add('hidden');
+    }
+
+    if(regras.length === 0 && exclusionRules.length === 0) {
+        DOM.regrasModalPlaceholder.classList.remove('hidden');
     }
   });
 
@@ -1031,7 +1037,7 @@ document.addEventListener('DOMContentLoaded', () => {
       deleteRule(banco, orc);
       e.target.parentElement.remove();
       showToast('Regra excluída.', 'success');
-      if (getRulesObject().regras.length === 0 && getExclusionRules().length === 0) {
+      if (getRulesObject().regras.length === 0) {
         DOM.regrasModalPlaceholder.classList.remove('hidden');
         DOM.infoVersaoRegras.classList.add('hidden');
       }
@@ -1133,7 +1139,7 @@ document.addEventListener('DOMContentLoaded', () => {
       toggleFocusMode(true);
     }
   });
-
+  
   DOM.btnAplicarRegrasExclusao.addEventListener('click', () => {
     const exclusionRules = getExclusionRules();
     if (exclusionRules.length === 0) {
@@ -1149,21 +1155,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
   DOM.previewBancoTbl.addEventListener('click', (e) => {
       const target = e.target;
-      const row = target.closest('tr');
-      if (!row) return;
+      if (!target.classList.contains('btn-add-exclusion-rule') && !target.classList.contains('btn-undo-exclusion')) {
+          return;
+      }
 
-      if (target.classList.contains('btn-add-exclusion-rule')) {
-          const description = target.dataset.description;
-          if (saveExclusionRule(description)) {
-              showToast(`Regra de exclusão para "${description}" salva!`, 'success');
-              row.classList.add('fading-out');
-              target.parentElement.innerHTML = `<button class="btn-undo-exclusion" data-description="${description}">Desfazer</button>`;
-          }
-      } else if (target.classList.contains('btn-undo-exclusion')) {
-          const description = target.dataset.description;
+      const description = target.dataset.description;
+      const isAddingRule = target.classList.contains('btn-add-exclusion-rule');
+
+      if (isAddingRule) {
+          saveExclusionRule(description);
+      } else {
           deleteExclusionRule(description);
-          row.classList.remove('fading-out');
-          target.parentElement.innerHTML = `<button class="btn-add-exclusion-rule" data-description="${description}" title="Criar regra para ignorar esta descrição">Ignorar</button>`;
+      }
+
+      const allRows = DOM.previewBancoTbl.querySelectorAll('tr.preview-table-row');
+      allRows.forEach(row => {
+          const rowButton = row.querySelector('.btn-add-exclusion-rule, .btn-undo-exclusion');
+          if (rowButton && rowButton.dataset.description === description) {
+              const actionCell = row.cells[row.cells.length - 1];
+              if (isAddingRule) {
+                  row.classList.add('fading-out');
+                  actionCell.innerHTML = `<button class="btn-undo-exclusion" data-description="${description}">Desfazer</button>`;
+              } else {
+                  row.classList.remove('fading-out');
+                  actionCell.innerHTML = `<button class="btn-add-exclusion-rule" data-description="${description}" title="Criar regra para ignorar esta descrição">Ignorar</button>`;
+              }
+          }
+      });
+
+      if (isAddingRule) {
+          showToast(`Regra para "${description}" aplicada na tabela.`, 'success');
+      } else {
+          showToast(`Regra para "${description}" revertida na tabela.`, 'info');
       }
   });
 
