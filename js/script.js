@@ -18,7 +18,7 @@ let filterState = {}; // Ex: { tabelaBanco: 'mercado' }
 // --- ELEMENTOS DO DOM (CACHE PARA PERFORMANCE) ---
 const DOM = {};
 
-// --- LÓgica DE REGRAS DE CONCILIAÇÃO ---
+// --- LÓgica de REGRAS DE CONCILIAÇÃO ---
 // Toda a lógica foi movida para motor-regras.js
 
 // --- FUNÇÕES DE LÓGICA DE SUGESTÃO ---
@@ -584,17 +584,6 @@ function processarDadosOrcamento(linhas) {
 function mostrarTabelaBanco(dados, id) {
   const exclusionRules = getExclusionRules();
   let dadosParaRenderizar = dados.filter(item => !exclusionRules.includes(item.descricao));
-  const hiddenCount = dados.length - dadosParaRenderizar.length;
-
-  if (DOM.bancoTableInfo) {
-      if (hiddenCount > 0) {
-          DOM.bancoTableInfo.textContent = `(${hiddenCount} item(s) oculto(s) por regras)`;
-          DOM.bancoTableInfo.classList.remove('hidden');
-      } else {
-          DOM.bancoTableInfo.textContent = '';
-          DOM.bancoTableInfo.classList.add('hidden');
-      }
-  }
 
   const sortInfo = sortState[id];
   if (sortInfo) {
@@ -631,7 +620,6 @@ function mostrarTabelaBanco(dados, id) {
   } else {
     dadosParaRenderizar.forEach(l => {
       const row = tbody.insertRow();
-      // Adicionamos a classe para que a regra do Modo Foco funcione, mesmo que não seja mais usada para esmaecer
       row.classList.add('preview-table-row');
       row.insertCell().innerText = l.data; 
       const descCell = row.insertCell();
@@ -844,7 +832,6 @@ document.addEventListener('DOMContentLoaded', () => {
     btnExportarPlanilha: document.getElementById('btnExportarPlanilha'),
     actionCenter: document.getElementById('actionCenter'),
     bancoTitle: document.querySelector('.panel-title--banco'),
-    bancoTableInfo: document.getElementById('bancoTableInfo'), // Adicionado para o contador
     orcamentoTitle: document.querySelector('.panel-title--orcamento'),
     btnComparar: document.getElementById('btnComparar'),
     btnExportarDiscrepBanco: document.getElementById('btnExportarDiscrepBanco'),
@@ -913,21 +900,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
     } else {
       showToast(`Nenhum lançamento válido encontrado. Verifique o formato.`, 'error');
-    }
-  });
-
-  // NOVO LISTENER DE CLIQUE - SIMPLIFICADO E CORRIGIDO
-  DOM.previewBancoTbl.addEventListener('click', (e) => {
-    const target = e.target;
-    if (target.classList.contains('btn-add-exclusion-rule')) {
-        const description = target.dataset.description;
-        if (saveExclusionRule(description)) {
-            showToast(`Regra de exclusão para "${description}" salva!`, 'success');
-            // Apenas dispara a re-renderização. A lógica de filtragem fará o resto.
-            rerenderTable('previewBanco');
-        } else {
-            showToast('Esta regra de exclusão já existe.', 'info');
-        }
     }
   });
 
@@ -1003,49 +975,92 @@ document.addEventListener('DOMContentLoaded', () => {
       comparar();
   });
 
+  DOM.previewBancoTbl.addEventListener('click', (e) => {
+      const target = e.target;
+      if (target.classList.contains('btn-add-exclusion-rule')) {
+          const description = target.dataset.description;
+          if (saveExclusionRule(description)) {
+              showToast(`Regra de exclusão para "${description}" salva!`, 'success');
+              rerenderTable('previewBanco');
+          } else {
+              showToast('Esta regra de exclusão já existe.', 'info');
+          }
+      }
+  });
+
   DOM.btnGerenciarRegras.addEventListener('click', () => {
-    DOM.regrasModal.classList.toggle('hidden');
-    if (DOM.regrasModal.classList.contains('hidden')) return;
-
-    const { timestamp, regras } = getRulesObject();
-    
-    if (timestamp) {
-        DOM.infoVersaoRegras.classList.remove('hidden');
-        DOM.timestampRegras.textContent = timestamp;
-    } else {
-        DOM.infoVersaoRegras.classList.add('hidden');
-    }
-
-    DOM.listaRegras.innerHTML = '';
-    if (regras.length > 0) {
-        DOM.regrasModalPlaceholder.classList.add('hidden');
-        regras.forEach(rule => {
-            const li = document.createElement('li');
-            li.innerHTML = `
-                <span><strong>Banco:</strong> ${rule.banco} → <strong>Orçamento:</strong> ${rule.orc}</span>
-                <button class="btn-delete-rule" data-banco="${rule.banco}" data-orc="${rule.orc}">Excluir</button>
-            `;
-            DOM.listaRegras.appendChild(li);
-        });
-    } else {
-        DOM.regrasModalPlaceholder.classList.remove('hidden');
-    }
+      DOM.regrasModal.classList.toggle('hidden');
+      if (DOM.regrasModal.classList.contains('hidden')) return;
+  
+      // --- Seção 1: Regras de Conciliação ---
+      const { timestamp, regras } = getRulesObject();
+      if (timestamp) {
+          DOM.infoVersaoRegras.classList.remove('hidden');
+          DOM.timestampRegras.textContent = timestamp;
+      } else {
+          DOM.infoVersaoRegras.classList.add('hidden');
+      }
+  
+      DOM.listaRegras.innerHTML = '';
+      if (regras.length > 0) {
+          regras.forEach(rule => {
+              const li = document.createElement('li');
+              li.innerHTML = `
+                  <span><strong>Banco:</strong> ${rule.banco} → <strong>Orçamento:</strong> ${rule.orc}</span>
+                  <button class="btn-delete-rule" data-banco="${rule.banco}" data-orc="${rule.orc}">Excluir</button>
+              `;
+              DOM.listaRegras.appendChild(li);
+          });
+      }
+  
+      // --- Seção 2: Regras de Exclusão ---
+      const exclusionRules = getExclusionRules();
+      if (exclusionRules.length > 0) {
+          if (regras.length > 0) {
+              const separator = document.createElement('hr');
+              separator.style.margin = '20px 0';
+              DOM.listaRegras.appendChild(separator);
+          }
+          exclusionRules.forEach(ruleDesc => {
+              const li = document.createElement('li');
+              li.innerHTML = `
+                  <span>Ignorar descrição: <strong>${ruleDesc}</strong></span>
+                  <button class="btn-delete-exclusion-rule" data-description="${ruleDesc}" style="background-color: var(--color-red-error);">Excluir</button>
+              `;
+              DOM.listaRegras.appendChild(li);
+          });
+      }
+      
+      // --- Atualiza o placeholder se NENHUMA regra existir ---
+      if (regras.length === 0 && exclusionRules.length === 0) {
+          DOM.regrasModalPlaceholder.classList.remove('hidden');
+      } else {
+          DOM.regrasModalPlaceholder.classList.add('hidden');
+      }
   });
 
   DOM.regrasModal.addEventListener('click', (e) => {
-    if (e.target.classList.contains('modal-overlay') || e.target.classList.contains('modal-close')) {
-      DOM.regrasModal.classList.add('hidden');
-    }
-    if (e.target.classList.contains('btn-delete-rule')) {
-      const { banco, orc } = e.target.dataset;
-      deleteRule(banco, orc);
-      e.target.parentElement.remove();
-      showToast('Regra excluída.', 'success');
-      if (getRulesObject().regras.length === 0) {
-        DOM.regrasModalPlaceholder.classList.remove('hidden');
-        DOM.infoVersaoRegras.classList.add('hidden');
+      if (e.target.classList.contains('modal-overlay') || e.target.classList.contains('modal-close')) {
+          DOM.regrasModal.classList.add('hidden');
       }
-    }
+      
+      if (e.target.classList.contains('btn-delete-rule')) {
+          const { banco, orc } = e.target.dataset;
+          deleteRule(banco, orc);
+          e.target.parentElement.remove();
+          showToast('Regra de conciliação excluída.', 'success');
+      }
+  
+      if (e.target.classList.contains('btn-delete-exclusion-rule')) {
+          const description = e.target.dataset.description;
+          deleteExclusionRule(description);
+          e.target.parentElement.remove();
+          showToast('Regra de exclusão removida. Re-processe ou re-ordene a tabela para ver o efeito.', 'warning');
+      }
+  
+      if (getRulesObject().regras.length === 0 && getExclusionRules().length === 0) {
+          DOM.regrasModalPlaceholder.classList.remove('hidden');
+      }
   });
 
   DOM.btnExportarRegras.addEventListener('click', exportarRegras);
@@ -1123,8 +1138,6 @@ document.addEventListener('DOMContentLoaded', () => {
       DOM.btnExitFocusMode.classList.remove('hidden');
       showToast('Modo Foco Ativado. Pressione "Esc" ou clique no botão para sair.', 'info');
     }
-    // Re-renderiza a tabela do banco para aplicar/remover a regra de ocultação do Modo Foco
-    rerenderTable('previewBanco');
   }
 
   DOM.btnModoFoco.addEventListener('click', () => {
