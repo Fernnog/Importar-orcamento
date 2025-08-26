@@ -720,7 +720,13 @@ async function exportarXLSX(dados, nomeArquivo) {
   if (!dados || !dados.length) { showToast("Lista para exportar está vazia.", 'error'); return; }
   try {
     await loadXLSXLibrary();
-    const ws = XLSX.utils.json_to_sheet(dados.map(l => ({ 'Data': l.data, 'Descrição': l.descricao, 'Valor': l.valor })));
+    const ws = XLSX.utils.json_to_sheet(dados.map(l => ({
+      'Data Ocorrência': l.data,
+      'Descrição': l.descricao,
+      'Valor': l.valor,
+      'Categoria': '', // Adiciona a coluna Categoria vazia
+      'Conta': 'CEF 204-5' // Adiciona a coluna Conta com valor fixo
+    })));
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Transacoes");
     XLSX.writeFile(wb, nomeArquivo); showToast('Planilha exportada!', 'success');
   } catch (error) { showToast(error.message, 'error'); }
@@ -919,7 +925,18 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast('Filtro aplicado com sucesso!', 'success');
   });
 
-  DOM.btnExportarPlanilha.addEventListener('click', () => exportarXLSX(appState.dadosBanco, 'importacao_pronta.xlsx'));
+  DOM.btnExportarPlanilha.addEventListener('click', () => {
+    // Pega as regras de exclusão salvas pelo usuário
+    const exclusionRules = getExclusionRules();
+    
+    // Filtra a lista de dados do banco, removendo os itens que correspondem a uma regra de exclusão
+    const dadosParaExportar = appState.dadosBanco.filter(
+      item => !exclusionRules.includes(item.descricao)
+    );
+
+    // Chama a função de exportação apenas com os dados filtrados
+    exportarXLSX(dadosParaExportar, 'importacao_pronta.xlsx');
+  });
 
   DOM.fileOrcamento.addEventListener('change', e => {
     if (!e.target.files.length) return;
